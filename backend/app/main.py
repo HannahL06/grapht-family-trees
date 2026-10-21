@@ -6,26 +6,32 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.core.db import close_driver
+from app.trees import router as trees_router
 from app.people import (
     add_child,
     add_person,
     add_spouse,
+    ensure_person_indexes,
     get_graph,
     link_child,
     link_parent,
     list_people,
 )
+from app.people import router as people_router
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    ensure_person_indexes()
     yield
     close_driver()
 
 
 app = FastAPI(title="Grapht API", lifespan=lifespan)
+app.include_router(trees_router)
+app.include_router(people_router)
 
 
 @app.get("/")
