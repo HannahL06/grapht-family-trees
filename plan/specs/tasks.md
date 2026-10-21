@@ -23,6 +23,13 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 
 ---
 
+### 1.x Practice AuraDB instance (optional, do anytime) [ ]
+Create a second AuraDB Free instance to use as a staging/practice environment, separate from the real instance (per discussion — same relationship as staging vs. production). Steps: (1) create a new free instance in the Aura console, (2) note its URI/username/password, (3) add them to `backend/.env` under different names, e.g. `NEO4J_PRACTICE_URI`, `NEO4J_PRACTICE_USERNAME`, `NEO4J_PRACTICE_PASSWORD` (and matching entries in `.env.example` with placeholders), (4) when practicing something risky (new Cypher, seed script changes, anything involving `DETACH DELETE`), manually point `core/config.py`/`core/db.py` at the practice credentials instead of the real ones. Not wired into the app automatically — a manual swap, not a feature. Can be done at any point, independent of task order; not blocking anything else in Phase 1.
+
+**Done when:** A second free instance exists, its credentials are in `.env`/`.env.example`, and you've successfully run a throwaway query against it without touching the real instance.
+
+---
+
 ### 1.2 Python project scaffold [x]
 **Agent brief:** Create a Python FastAPI project in a `backend/` directory. Structure: `backend/app/main.py` (FastAPI app entry point), `backend/app/core/` (empty placeholder files `config.py`, `db.py`, `security.py`, `dependencies.py`), and one empty package (with `__init__.py`) per feature: `auth/`, `trees/`, `access/`, `people/`, `relationships/`, `analysis/` — each will later hold `router.py`, `service.py`, `repository.py`, `schemas.py` (see `structure.md` for layer rules; do not create those files yet), `backend/tests/` directory with a placeholder test, `backend/seed/` directory. Create `backend/requirements.txt` with: `fastapi`, `uvicorn[standard]`, `neo4j`, `PyJWT`, `pwdlib[argon2]`, `python-dotenv`, `pytest`, `httpx`. In `main.py`, create the FastAPI app and add a `GET /` health check route that returns `{"status": "ok"}`. Create a `backend/.env.example` file showing the env vars that will be needed: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `JWT_SECRET`.
 
