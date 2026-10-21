@@ -1,5 +1,5 @@
 """Integration tests: these make real calls against the configured AuraDB
-instance (Tasks 1.6/1.7). Each test creates and cleans up its own
+instance (Tasks 1.6/1.7/1.8). Each test creates and cleans up its own
 tree(s)/people — nothing here touches the sample-fam seed data.
 
 Uses the `client` fixture from conftest.py, which triggers FastAPI's
@@ -128,3 +128,147 @@ def test_get_missing_person_returns_404(client, tree_ids):
     tree_a, _ = tree_ids
     r = client.get(f"/trees/{tree_a}/people/does-not-exist")
     assert r.status_code == 404
+
+
+# --- Relationships (Task 1.8) ------------------------------------------
+
+def _add_person(client, tree_id, name):
+    return client.post(f"/trees/{tree_id}/people", json={"name": name}).json()["id"]
+
+
+def test_parent_of_create_is_idempotent(client, tree_ids):
+    """Creating the same PARENT_OF edge twice must not produce a duplicate
+    (MERGE, not CREATE) — same relationship_id both times."""
+    tree_a, _ = tree_ids
+    parent_id = _add_person(client, tree_a, "Parent")
+    child_id = _add_person(client, tree_a, "Child")
+
+    r1 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": parent_id, "person_b_id": child_id, "type": "PARENT_OF"},
+    )
+    assert r1.status_code == 200
+    rel_id_1 = r1.json()["relationship_id"]
+
+    r2 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": parent_id, "person_b_id": child_id, "type": "PARENT_OF"},
+    )
+    assert r2.status_code == 200
+    rel_id_2 = r2.json()["relationship_id"]
+
+    assert rel_id_1 == rel_id_2  # no duplicate edge was created
+
+
+def test_married_to_detects_existing_regardless_of_direction(client, tree_ids):
+    """MERGE alone only checks one direction — this proves the explicit
+    both-directions check actually works, by creating a->b then b->a."""
+    tree_a, _ = tree_ids
+    alice_id = _add_person(client, tree_a, "Alice")
+    bob_id = _add_person(client, tree_a, "Bob")
+
+    r1 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": alice_id, "person_b_id": bob_id, "type": "MARRIED_TO"},
+    )
+    assert r1.status_code == 200
+    rel_id_1 = r1.json()["relationship_id"]
+
+    # reversed order on purpose
+    r2 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": bob_id, "person_b_id": alice_id, "type": "MARRIED_TO"},
+    )
+    assert r2.status_code == 200
+    rel_id_2 = r2.json()["relationship_id"]
+
+    assert rel_id_1 == rel_id_2  # recognized as the same existing marriage
+
+
+def test_married_to_allows_polygamy(client, tree_ids):
+    """No count limit on MARRIED_TO — one person can have multiple
+    distinct partners, each a separate edge."""
+    tree_a, _ = tree_ids
+    person_id = _add_person(client, tree_a, "Person")
+    partner_1 = _add_person(client, tree_a, "Partner One")
+    partner_2 = _add_person(client, tree_a, "Partner Two")
+
+    r1 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": person_id, "person_b_id": partner_1, "type": "MARRIED_TO"},
+    )
+    r2 = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": person_id, "person_b_id": partner_2, "type": "MARRIED_TO"},
+    )
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["relationship_id"] != r2.json()["relationship_id"]
+
+
+def test_self_relationship_rejected(client, tree_ids):
+    tree_a, _ = tree_ids
+    person_id = _add_person(client, tree_a, "Solo")
+    r = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": person_id, "person_b_id": person_id, "type": "PARENT_OF"},
+    )
+    assert r.status_code == 400
+
+
+def test_relationship_rejects_person_from_other_tree(client, tree_ids):
+    tree_a, tree_b = tree_ids
+    person_a = _add_person(client, tree_a, "InTreeA")
+    person_b = _add_person(client, tree_b, "InTreeB")
+
+    r = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": person_a, "person_b_id": person_b, "type": "PARENT_OF"},
+    )
+    assert r.status_code == 404
+
+
+def test_invalid_relationship_type_rejected(client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(client, tree_a, "A")
+    b = _add_person(client, tree_a, "B")
+    r = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "NONSENSE"},
+    )
+    assert r.status_code == 422  # FastAPI/Pydantic rejects it before our code runs
+
+
+def test_delete_relationship(client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(client, tree_a, "A")
+    b = _add_person(client, tree_a, "B")
+    rel_id = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
+    ).json()["relationship_id"]
+
+    r = client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    assert r.status_code == 204
+
+    # deleting again — it's gone now, so 404
+    r = client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    assert r.status_code == 404
+
+
+def test_delete_relationship_cross_tree_rejected(client, tree_ids):
+    tree_a, tree_b = tree_ids
+    a = _add_person(client, tree_a, "A")
+    b = _add_person(client, tree_a, "B")
+    rel_id = client.post(
+        f"/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
+    ).json()["relationship_id"]
+
+    # the relationship is in tree_a — deleting it through tree_b must fail
+    r = client.delete(f"/trees/{tree_b}/relationships/{rel_id}")
+    assert r.status_code == 404
+
+    # and it must still exist afterward, deletable through the real tree
+    r = client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    assert r.status_code == 204

@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Grapht — sprint demo</title>
+  <title>Grapht — backend demo</title>
   <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 0; display: flex; }
@@ -77,6 +77,10 @@
   <div id="graph"></div>
 
   <script>
+    // This page talks to the REAL tree-scoped API (Tasks 1.6-1.8, 2.7),
+    // not any demo-only backend logic. TREE_ID is hardcoded only because
+    // this is a one-tree demo page -- the real app lets you pick a tree.
+    const TREE_ID = 'sample-fam';
     let cy;
 
     function setStatus(msg, isError) {
@@ -85,8 +89,16 @@
       el.style.color = isError ? 'crimson' : '#666';
     }
 
+    async function createRelationship(personAId, personBId, type) {
+      return fetch(`/trees/${TREE_ID}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_a_id: personAId, person_b_id: personBId, type }),
+      });
+    }
+
     async function refreshGraph() {
-      const res = await fetch('/graph');
+      const res = await fetch(`/trees/${TREE_ID}/graph`);
       const data = await res.json();
 
       const nodeEls = data.nodes.map(n => ({ data: { id: n.id, label: n.name } }));
@@ -133,7 +145,7 @@
     }
 
     async function refreshPeopleDropdowns() {
-      const res = await fetch('/people');
+      const res = await fetch(`/trees/${TREE_ID}/people`);
       const people = await res.json();
       const options = people.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
@@ -151,7 +163,7 @@
       const name = document.getElementById('person-name').value.trim();
       if (!name) return setStatus('Name is required.', true);
       const birth_year = document.getElementById('person-birth-year').value || null;
-      const res = await fetch('/people', {
+      const res = await fetch(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -164,18 +176,23 @@
     }
 
     async function addSpouse() {
+      // Two real API calls, not one: create the new person, then link them.
       const person_id = document.getElementById('spouse-of').value;
       const name = document.getElementById('spouse-name').value.trim();
       if (!person_id || !name) return setStatus('Pick a person and enter a spouse name.', true);
       const birth_year = document.getElementById('spouse-birth-year').value || null;
-      const res = await fetch('/spouse', {
+
+      const createRes = await fetch(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          person_id, name, birth_year: birth_year ? Number(birth_year) : null,
-        }),
+        body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
       });
-      if (!res.ok) return setStatus('Failed to add spouse.', true);
+      if (!createRes.ok) return setStatus('Failed to create spouse.', true);
+      const spouse = await createRes.json();
+
+      const linkRes = await createRelationship(person_id, spouse.id, 'MARRIED_TO');
+      if (!linkRes.ok) return setStatus('Created spouse, but failed to link them.', true);
+
       document.getElementById('spouse-name').value = '';
       document.getElementById('spouse-birth-year').value = '';
       setStatus(`Added spouse ${name}.`);
@@ -183,20 +200,27 @@
     }
 
     async function addChild() {
+      // Two or three real API calls: create the child, then link each parent.
       const parent_id = document.getElementById('child-parent').value;
       const second_parent_id = document.getElementById('child-second-parent').value || null;
       const name = document.getElementById('child-name').value.trim();
       if (!parent_id || !name) return setStatus('Pick a parent and enter a child name.', true);
       const birth_year = document.getElementById('child-birth-year').value || null;
-      const res = await fetch('/child', {
+
+      const createRes = await fetch(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          parent_id, second_parent_id, name,
-          birth_year: birth_year ? Number(birth_year) : null,
-        }),
+        body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
       });
-      if (!res.ok) return setStatus('Failed to add child.', true);
+      if (!createRes.ok) return setStatus('Failed to create child.', true);
+      const child = await createRes.json();
+
+      const parentIds = [parent_id, ...(second_parent_id ? [second_parent_id] : [])];
+      for (const pid of parentIds) {
+        const linkRes = await createRelationship(pid, child.id, 'PARENT_OF');
+        if (!linkRes.ok) return setStatus('Created child, but failed to link a parent.', true);
+      }
+
       document.getElementById('child-name').value = '';
       document.getElementById('child-birth-year').value = '';
       setStatus(`Added child ${name}.`);
@@ -208,11 +232,8 @@
       const child_id = document.getElementById('link-child-child').value;
       if (!parent_id || !child_id) return setStatus('Pick both a parent and a child.', true);
       if (parent_id === child_id) return setStatus('Parent and child must be different people.', true);
-      const res = await fetch('/link-child', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parent_id, child_id }),
-      });
+
+      const res = await createRelationship(parent_id, child_id, 'PARENT_OF');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         return setStatus(err.detail || 'Failed to link child.', true);
@@ -226,11 +247,8 @@
       const parent_id = document.getElementById('link-parent-parent').value;
       if (!parent_id || !child_id) return setStatus('Pick both a child and a parent.', true);
       if (parent_id === child_id) return setStatus('Parent and child must be different people.', true);
-      const res = await fetch('/link-parent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ child_id, parent_id }),
-      });
+
+      const res = await createRelationship(parent_id, child_id, 'PARENT_OF');
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         return setStatus(err.detail || 'Failed to link parent.', true);
