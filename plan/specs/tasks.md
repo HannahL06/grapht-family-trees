@@ -45,7 +45,7 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ---
 
 ### 1.5 Pydantic models [ ]
-**Agent brief:** Create Pydantic schemas, one `schemas.py` per feature folder. In `people/schemas.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees/schemas.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships/schemas.py`: `RelationshipCreate` (person_a_id, person_b_id, type — either "PARENT_OF" or "MARRIED_TO"), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, type). In `auth/schemas.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
+**Agent brief:** Create Pydantic schemas, one `schemas.py` per feature folder. In `people/schemas.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees/schemas.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships/schemas.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth/schemas.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
 
 **Done when:** `python -c "from app.people.schemas import PersonCreate; PersonCreate(name='Test')"` runs without error.
 
@@ -70,9 +70,15 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ### 1.8 Relationship CRUD endpoints [ ]
 **Agent brief:** Implement the relationships feature in `backend/app/relationships/` (`router.py`, `service.py`, `repository.py`, `schemas.py`; all Cypher in `repository.py`). Implement: `POST /trees/{tree_id}/relationships` — given `RelationshipCreate` body, create either a `PARENT_OF` or `MARRIED_TO` edge between the two people in Neo4j. Return `RelationshipResponse` including the Neo4j relationship element ID as `relationship_id`. `DELETE /trees/{tree_id}/relationships/{relationship_id}` — delete the relationship by its element ID. Validate that both people exist and belong to the specified tree before creating the relationship. Register the router in `main.py`.
 
+**Relationship enforcement (see `design.md`):**
+- Reject if `person_a_id == person_b_id` (no self-relationship), before any Cypher runs.
+- `PARENT_OF`: use `MERGE` on the exact directed pattern `(a)-[:PARENT_OF]->(b)`, not `CREATE` — Cypher does not deduplicate on its own, and `CREATE` run twice makes two parallel edges that both exist and both show up in traversals/counts. No limit on number of parents or children.
+- `MARRIED_TO`: before creating, explicitly check both directions for an existing edge (`MERGE` alone only checks the one direction you write). No limit on number of partners (polygamy is in scope) — reject only an exact duplicate pair.
+- Cycle prevention for `PARENT_OF` is explicitly OUT of scope for this task — deferred to Phase 3 (Task 3.1+), once the ancestor-walk exists to reuse. Do not implement a separate cycle check here.
+
 **Tree isolation:** reject with 400/404 if the two people are not both in the tree from the URL (no cross-tree edges). Deleting a relationship must also verify it connects people in that tree.
 
-**Done when:** Can create a PARENT_OF edge between two people, verify it in Aura Console, then delete it via the API. Trying to link two people from different trees is rejected.
+**Done when:** Can create a PARENT_OF edge between two people, verify it in Aura Console, then delete it via the API. Trying to link two people from different trees is rejected. Submitting the same PARENT_OF or MARRIED_TO pair twice does not create a duplicate edge. Creating two MARRIED_TO edges from one person to two different partners succeeds (polygamy case).
 
 ---
 
@@ -142,7 +148,7 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ---
 
 ### 2.7 Graph visualization (rough) [ ]
-**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in the `backend/app/analysis/` feature: router, service, repository). It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using a force-directed (`cose`) layout. Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
+**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in the `backend/app/analysis/` feature: router, service, repository). It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using the `cytoscape-fcose` layout (install `cytoscape-fcose`; it's a faster, better-scaling variant of `cose` — prefer it over plain `cose` from the start, since it also naturally spaces out distant/weakly-connected branches). Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
 
 **Done when:** Navigating to a tree renders the nodes and edges from seed data as a graph. The layout is messy but the nodes are there.
 
@@ -188,7 +194,7 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ---
 
 ### 3.6 Access control endpoints [ ]
-**Agent brief:** In a new `backend/app/access/` feature (`router.py`, `service.py`, `repository.py`, `schemas.py`), implement the sharing endpoints. `POST /trees/{tree_id}/access` — body: `{email, role}`. Look up the target User node by (lowercased) email in Neo4j, then create a `HAS_ACCESS {role}` relationship from their User node to the Tree node. Only the tree owner can call this. `GET /trees/{tree_id}/access` — return list of `{user_id, name, email, role}` for all users with access. `PATCH /trees/{tree_id}/access/{user_id}` — update the role property on the HAS_ACCESS relationship. `DELETE /trees/{tree_id}/access/{user_id}` — remove the HAS_ACCESS relationship. Owner cannot remove themselves.
+**Agent brief:** In a new `backend/app/access/` feature (`router.py`, `service.py`, `repository.py`, `schemas.py`), implement the sharing endpoints. `POST /trees/{tree_id}/access` — body: `{email, role}`. Look up the target User node by (lowercased) email in Neo4j, then create a `HAS_ACCESS {role}` relationship from their User node to the Tree node. Only the tree owner can call this. `GET /trees/{tree_id}/access` — return list of `{user_id, name, role}` for all users with access (include `email` only when the requester is the owner). `PATCH /trees/{tree_id}/access/{user_id}` — update the role property on the HAS_ACCESS relationship. `DELETE /trees/{tree_id}/access/{user_id}` — remove the HAS_ACCESS relationship. Owner cannot remove themselves.
 
 **Done when:** Can grant editor access to a second test user, verify they can see the tree, then revoke it.
 
@@ -213,7 +219,7 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ## Phase 4 — UI Updates (~10 hrs, ~weeks 14–16)
 
 ### 4.1 Traditional tree layout (Cytoscape.js) [ ]
-**Agent brief:** Install `cytoscape-dagre` and `dagre` in the frontend. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (current cose layout) or `"tree"` (dagre hierarchical layout). In TreeView, add a toggle button that switches between the two layouts. The dagre layout should have `rankDir: "TB"` (top-to-bottom) and treat `PARENT_OF` edges as defining the hierarchy direction.
+**Agent brief:** Install `cytoscape-dagre` and `dagre` in the frontend. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (current fcose layout) or `"tree"` (dagre hierarchical layout). In TreeView, add a toggle button that switches between the two layouts. The dagre layout should have `rankDir: "TB"` (top-to-bottom) and treat `PARENT_OF` edges as defining the hierarchy direction.
 
 **Done when:** Toggle button switches between force-directed and top-down hierarchical layouts for seed data.
 
@@ -294,6 +300,8 @@ Before handing a task to an agent, paste in the relevant steering files (`produc
 ### 5.6 Large seed script + demo data [ ]
 **Agent brief:** Expand `backend/seed/seed.py` to generate ~2,500 Person nodes across ~20 generations with realistic pedigree collapse patterns. Strategy: generate a base population of ~100 "founder" couples at the top, then each generation has children who sometimes marry cousins from the same generation (introduce cousin marriages at a rate that produces 10–20 meaningful multi-path relationship cases). Name people with generated names (can use a simple list). Run the script against the production AuraDB. Test the relationship-path endpoint against at least 3 known cousin-marriage pairs in the generated data and verify multi-path results.
 
+**Also check layout behavior at scale:** render this data in both the fcose and dagre layouts (Tasks 2.7, 4.1) and confirm that distant/weakly-connected branches visually separate and that denser branches get proportionally more space, without custom layout code. If `fcose` is too slow or cluttered at ~2,500 nodes, that's the signal to lean on branch collapse/expand (Task 4.4) and the zoom-clustering backlog item rather than writing a custom layout.
+
 **Done when:** AuraDB has ~2,500 nodes. At least 3 relationship-path queries return multiple paths with correct labels.
 
 ---
@@ -306,7 +314,16 @@ Review completed tasks. Note anything that was marked done but wasn't fully veri
 ### 6.2 Thesis write-up support [ ]
 The implementation report needs to explain: data model choices (why no Family node), the algorithm (ancestor intersection approach), security measures implemented, and validation methodology (what the unit tests cover and why representative coverage is sufficient). Use `design.md` and `requirements.md` as source material.
 
-### 6.3 Backlog (only if time allows, in priority order) [ ]
+### 6.3 Extended Person fields [ ]
+Add the extra Person properties from the original data model notes: gender, full date of birth, Hebrew birthday, date of death (yahrzeit), and places lived. Update `people/schemas.py`, `people/repository.py`, `PersonForm.jsx` and `PersonPanel.jsx`. Open decisions to settle first: how vague historical dates (e.g. "approximately 1500s") are stored alongside full dates, and whether the Hebrew date is entered or calculated from the regular date. The current Person fields are enough until then.
+
+### 6.5 "Home person" default focus (UI extra) [ ]
+Give the graph view a sensible default center when no `root_person_id` is passed — not a root in the data-structure sense (the graph has none, and this has no security meaning), purely a UI convenience computed on the fly, not stored. Add a repository/service function that computes a reasonable default each time it's requested, e.g. the person with the most generations beneath them (largest descendant depth), or most total descendants — run as a query at request time, not persisted on the Tree node. Wire `GET /trees/{tree_id}/graph` to use this when `root_person_id` is omitted. Nice-to-have, not required for the demo; revisit the exact "biggest generation chain" metric when this is picked up.
+
+### 6.6 Invite by email (pre-registration sharing) [ ]
+Let a tree owner share a tree with someone who hasn't registered yet, by email (like a Google Doc invite), per the earlier discussion. Needs: a pending `Invite` record (email, tree_id, role) OR a placeholder `User` node created with just an email; when someone registers with that email, turn the invite into a real `HAS_ACCESS` edge. Requires email verification at registration — otherwise anyone could register with an invited email and claim that access. Build only after core sharing (3.5–3.7) works for already-registered users.
+
+### 6.4 Backlog (only if time allows, in priority order) [ ]
 1. GEDCOM import/export
 2. In-law relationship paths via MARRIED_TO traversal
 3. `KNOWN_DESCENDANT_OF` edge type for undocumented historical ancestors

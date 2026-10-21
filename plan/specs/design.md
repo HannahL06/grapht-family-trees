@@ -6,22 +6,44 @@ Consolidated technical decisions. See `steering/tech.md` for the full stack and 
 
 ## Data Model
 
-### Neo4j (family tree data)
+Neo4j has no fixed schema: labels, properties and relationship types exist by convention. Only constraints and indexes are enforced by the database (created by `core/schema.py`). Everything lives in Neo4j, including users (one datastore, nothing lost on redeploys). No `Family` node: pure person-to-person edges.
 
-**Nodes**
-- `Person` — properties: `id` (UUID), `tree_id`, `name`, `birth_year` (optional), `death_year` (optional), `birth_place` (optional), `notes` (optional)
-- `Tree` — properties: `id` (UUID), `name`, `owner_id`
-- `User` — properties: `id` (UUID), `name` (required display name), `email` (unique, lowercased), `password_hash` (Argon2id), `created_at`
+### Person
+- Properties: `id` (UUID), `tree_id`, `name`, `birth_year` (optional), `death_year` (optional), `birth_place` (optional), `notes` (optional)
+- Constraints: `id` unique; index on `tree_id`
+- Belongs to exactly one tree (via `tree_id`); no edge ever crosses trees
+- Extra fields (gender, full dates, Hebrew birthday, yahrzeit, places lived) are deferred (Task 6.3)
 
-**Edges**
-- `(Person)-[:PARENT_OF]->(Person)` — directed, parent → child
-- `(Person)-[:MARRIED_TO]->(Person)` — undirected (store one direction, query both)
-- `(User)-[:HAS_ACCESS {role: "editor"|"viewer"}]->(Tree)` — access control
+### Tree
+- Properties: `id` (UUID), `name`, `owner_id`
+- Constraints: `id` unique
 
-No `Family` node. Pure person-to-person edges.
+### User
+- Properties: `id` (UUID), `name`, `email`, `password_hash` (Argon2id), `created_at`
+- `name`: display name; not unique; not used for login; visible to other users (trees are shared among family, so it is not private)
+- `email`: used for login; unique; stored lowercased; private (not shown to other users, except the tree owner when inviting)
+- No separate username
+- Constraints: `id` unique; `email` unique
 
-### User/account data
-Stored in Neo4j as `User` nodes (see above), not a separate relational database. Chosen for simplicity: one datastore, no sync, nothing to lose on container redeploys, and users connect to trees via `HAS_ACCESS`. Unique constraints on `User.email` and `User.id` are enforced in the database. Revisit if a real need for a relational store appears (e.g., backups, since AuraDB Free has none).
+### PARENT_OF (relationship)
+- `(Person)-[:PARENT_OF]->(Person)`, direction parent → child
+- One edge per parent-child pair; both people must be in the same tree
+- No count limit (a child may have >2 parents; a person may parent any number of children) — `PARENT_OF` represents biological parentage only (per scope boundaries). Step/adoptive relationships are deferred: future relationship types (e.g. `STEP_PARENT_OF`, `ADOPTED_PARENT_OF`) once the core app works, not folded into `PARENT_OF` now.
+- Enforced in `relationships/repository.py` at creation, via `MERGE` on the exact directed pattern (not `CREATE`) — Neo4j has no constraint type for "at most one edge between these two nodes," so this must be checked/handled in code, not the database
+- No self-relationship (`person_a_id != person_b_id`), checked before any Cypher runs
+- Cycle prevention (a person cannot become their own ancestor) is deferred to Phase 3, once Task 3.1's ancestor-walk exists — reusing that logic rather than writing a second version early. Until then, this is not checked; avoid creating cyclic data by hand.
+
+### MARRIED_TO (relationship)
+- `(Person)-[:MARRIED_TO]->(Person)`
+- One edge per couple; direction is arbitrary and never semantically meaningful — always query with `-[:MARRIED_TO]-` (no arrow)
+- No count limit on number of partners (supports polygamous families) — the only rule is no duplicate edge for the *same* pair
+- Enforced in `relationships/repository.py` at creation: check both directions for an existing edge before creating (`MERGE` alone only checks one direction, so this needs an explicit check)
+- No self-relationship, checked before any Cypher runs
+
+### HAS_ACCESS (relationship)
+- `(User)-[:HAS_ACCESS {role}]->(Tree)`
+- `role`: `owner` | `editor` | `viewer`
+- The owner edge is created with the tree; editor/viewer sharing and enforcement are deferrable
 
 ---
 
