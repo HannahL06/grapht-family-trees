@@ -1,13 +1,65 @@
 """Integration tests: these make real calls against the configured AuraDB
-instance (Tasks 1.6/1.7/1.8). Each test creates and cleans up its own
-tree(s)/people — nothing here touches the sample-fam seed data.
+instance (Tasks 1.6/1.7/1.8/1.9). Each test creates and cleans up its own
+tree(s)/people/users — nothing here touches the sample-fam seed data.
 
 Uses the `client` fixture from conftest.py, which triggers FastAPI's
 lifespan (ensure_person_indexes() runs against the real database on
 every test here).
 """
 
+import uuid
+
 import pytest
+
+from app.core.db import run_query
+
+
+# --- Auth (Task 1.9) ----------------------------------------------------
+
+@pytest.fixture
+def register_user(client):
+    created_emails = []
+
+    def _register(name="Test User", email=None, password="correct-horse-battery-staple"):
+        if email is None:
+            email = f"test-{uuid.uuid4()}@example.com"
+        resp = client.post(
+            "/auth/register", json={"name": name, "email": email, "password": password}
+        )
+        if resp.status_code == 201:
+            created_emails.append(email.lower())
+        return resp
+
+    yield _register
+
+    for email in created_emails:
+        run_query("MATCH (u:User {email: $email}) DETACH DELETE u", {"email": email})
+
+
+def test_register_new_user_returns_201(register_user):
+    resp = register_user(name="Alice Example")
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["name"] == "Alice Example"
+    assert "password" not in body
+    assert "password_hash" not in body
+
+
+def test_register_duplicate_email_rejected(register_user):
+    email = f"dup-{uuid.uuid4()}@example.com"
+    first = register_user(email=email)
+    assert first.status_code == 201
+
+    # same email, different case — must still be caught as a duplicate
+    second = register_user(email=email.upper(), name="Someone Else")
+    assert second.status_code == 400
+
+
+def test_register_normalizes_email_to_lowercase(register_user):
+    email = f"case-{uuid.uuid4()}@example.com"
+    resp = register_user(email=email.upper())
+    assert resp.status_code == 201
+    assert resp.json()["email"] == email.lower()
 
 
 # --- Trees (Task 1.6) -------------------------------------------------

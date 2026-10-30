@@ -26,7 +26,8 @@ Neo4j has no fixed schema: labels, properties and relationship types exist by co
 - Constraints: `id` unique; `email` unique
 
 ### PARENT_OF (relationship)
-- `(Person)-[:PARENT_OF]->(Person)`, direction parent → child
+- `(Person)-[:PARENT_OF {id}]->(Person)`, direction parent → child
+- `id` (UUID, generated in Python at creation, same pattern as `Person.id`/`Tree.id`) — NOT `elementId(r)`. Neo4j's own docs warn element IDs aren't guaranteed stable outside a single transaction, can be reused after deletion, and can change across a restore, dump/load, or database copy. Relationships need an explicit application-level `id` property for the same reason nodes have one.
 - One edge per parent-child pair; both people must be in the same tree
 - No count limit (a child may have >2 parents; a person may parent any number of children) — `PARENT_OF` represents biological parentage only (per scope boundaries). Step/adoptive relationships are deferred: future relationship types (e.g. `STEP_PARENT_OF`, `ADOPTED_PARENT_OF`) once the core app works, not folded into `PARENT_OF` now.
 - Enforced in `relationships/repository.py` at creation, via `MERGE` on the exact directed pattern (not `CREATE`) — Neo4j has no constraint type for "at most one edge between these two nodes," so this must be checked/handled in code, not the database
@@ -34,7 +35,8 @@ Neo4j has no fixed schema: labels, properties and relationship types exist by co
 - Cycle prevention (a person cannot become their own ancestor) is deferred to Phase 3, once Task 3.1's ancestor-walk exists — reusing that logic rather than writing a second version early. Until then, this is not checked; avoid creating cyclic data by hand.
 
 ### MARRIED_TO (relationship)
-- `(Person)-[:MARRIED_TO]->(Person)`
+- `(Person)-[:MARRIED_TO {id}]->(Person)`
+- `id` (UUID, generated in Python at creation) — same reasoning as `PARENT_OF` above
 - One edge per couple; direction is arbitrary and never semantically meaningful — always query with `-[:MARRIED_TO]-` (no arrow)
 - No count limit on number of partners (supports polygamous families) — the only rule is no duplicate edge for the *same* pair
 - Enforced in `relationships/repository.py` at creation: check both directions for an existing edge before creating (`MERGE` alone only checks one direction, so this needs an explicit check)
@@ -49,10 +51,11 @@ Neo4j has no fixed schema: labels, properties and relationship types exist by co
 
 ## Backend Layering
 
-Organized by feature (`auth`, `trees`, `access`, `people`, `relationships`, `analysis`), each with `router.py` → `service.py` → `repository.py` plus `schemas.py`. Shared pieces live in `core/` (config, Neo4j driver, security, dependencies).
-- Router: HTTP only. Service: rules and orchestration. Repository: all Cypher, fully parameterized, `tree_id` on every tree-scoped function.
-- Only repositories import the database driver. The relationship algorithm (`analysis/algorithm.py`) is pure Python and has no database access, so it is unit tested with plain dicts.
-- Benefit: tree isolation and Cypher-injection audits only need to read the `repository.py` files. See `steering/structure.md` for the full layout.
+Organized by feature, **one file per feature**: `auth.py`, `trees.py`, `access.py`, `people.py`, `relationships.py`, `analysis.py` — each holds its own Pydantic schemas, FastAPI routes, and Cypher together. No router/service/repository split: considered, then deliberately dropped as unnecessary ceremony for a solo project at this scale. Shared pieces live in `core/` (config, Neo4j driver, security, dependencies).
+- All Cypher is fully parameterized, with `tree_id` on every tree-scoped query.
+- The relationship-classification functions in `analysis.py` (`find_common_ancestors`, `classify_relationship`) are written as plain functions with no database calls inside them, so they're still unit tested with plain dicts, even though they live in the same file as routes that do touch the database.
+- Tree isolation and Cypher-injection audits mean reading these feature files — there's nowhere else Cypher could be. See `steering/structure.md` for the full layout.
+- If Phase 3's access-control logic ends up needing a shared place to live across many routes, reconsider pulling that specific logic into `core/dependencies.py` (already planned) rather than reintroducing a full layered split.
 
 ## Authentication & Authorization
 

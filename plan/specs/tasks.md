@@ -31,51 +31,51 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 1.2 Python project scaffold [x]
-**Agent brief:** Create a Python FastAPI project in a `backend/` directory. Structure: `backend/app/main.py` (FastAPI app entry point), `backend/app/core/` (empty placeholder files `config.py`, `db.py`, `security.py`, `dependencies.py`), and one empty package (with `__init__.py`) per feature: `auth/`, `trees/`, `access/`, `people/`, `relationships/`, `analysis/` — each will later hold `router.py`, `service.py`, `repository.py`, `schemas.py` (see `structure.md` for layer rules; do not create those files yet), `backend/tests/` directory with a placeholder test, `backend/seed/` directory. Create `backend/requirements.txt` with: `fastapi`, `uvicorn[standard]`, `neo4j`, `PyJWT`, `pwdlib[argon2]`, `python-dotenv`, `pytest`, `httpx`. In `main.py`, create the FastAPI app and add a `GET /` health check route that returns `{"status": "ok"}`. Create a `backend/.env.example` file showing the env vars that will be needed: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `JWT_SECRET`.
+**Agent brief:** Create a Python FastAPI project in a `backend/` directory. Structure: `backend/app/main.py` (FastAPI app entry point), `backend/app/core/` (empty placeholder files `config.py`, `db.py`, `security.py`, `dependencies.py`), and one empty placeholder file per feature directly under `backend/app/`: `auth.py`, `trees.py`, `access.py`, `people.py`, `relationships.py`, `analysis.py` — each will later hold its own schemas, routes, and Cypher together, one file per feature, no further split (see `structure.md`; do not add real content to those files yet), `backend/tests/` directory with a placeholder test, `backend/seed/` directory. Create `backend/requirements.txt` with: `fastapi`, `uvicorn[standard]`, `neo4j`, `PyJWT`, `pwdlib[argon2]`, `python-dotenv`, `pytest`, `httpx`. In `main.py`, create the FastAPI app and add a `GET /` health check route that returns `{"status": "ok"}`. Create a `backend/.env.example` file showing the env vars that will be needed: `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `JWT_SECRET`.
 
 **Done when:** `uvicorn app.main:app --reload` starts without errors and `GET /` returns `{"status": "ok"}`.
 
 ---
 
-### 1.3 Neo4j connection module [ ]
+### 1.3 Neo4j connection module [x]
 **Agent brief:** In `backend/app/core/db.py`, create a Neo4j driver connection using the `neo4j` Python driver. Load `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD` from environment variables via `python-dotenv`. Create a `get_driver()` function and a `run_query(query, params)` helper that opens a session, runs the query, and returns the results as a list of dicts. Create a `backend/.env` file (not committed) with the AuraDB credentials. Add a simple connectivity test: a function that runs `RETURN 1 AS n` and prints success/failure.
 
 **Done when:** Running `python -c "from app.core.db import test_connection; test_connection()"` from `backend/` prints a success message and does not raise.
 
 ---
 
-### 1.4 Seed script — small dataset [ ]
+### 1.4 Seed script — small dataset [x]
 **Agent brief:** Create `backend/seed/seed.py`. It should connect to Neo4j using the same `app/core/db.py` connection. Clear all existing data first (`MATCH (n) DETACH DELETE n`). Then create: 20 Person nodes with properties `id` (UUID), `tree_id` (use a fixed UUID for now), `name`, and optional `birth_year`. Create `PARENT_OF` edges to form: 2 grandparent pairs at the top, 2 sets of parents below them, 4 people in the "current generation" — including at least one cousin marriage (two cousins who are also partners). Add `MARRIED_TO` edges for the couples. Print a summary of how many nodes and edges were created.
 
 **Done when:** Script runs without errors, and the Aura Console shows the expected nodes and edges.
 
 ---
 
-### 1.5 Pydantic models [ ]
-**Agent brief:** Create Pydantic schemas, one `schemas.py` per feature folder. In `people/schemas.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees/schemas.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships/schemas.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth/schemas.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
+### 1.5 Pydantic models [x]
+**Agent brief:** Create Pydantic schemas directly in each feature file (no separate `schemas.py` — one file per feature holds its schemas, routes, and Cypher together). In `people.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
 
-**Done when:** `python -c "from app.people.schemas import PersonCreate; PersonCreate(name='Test')"` runs without error.
+**Done when:** `python -c "from app.people import PersonCreate; PersonCreate(name='Test')"` runs without error.
 
 ---
 
-### 1.6 Tree CRUD endpoints [ ]
-**Agent brief:** Implement the trees feature in `backend/app/trees/` using the three layers: `router.py` (HTTP only), `service.py` (logic), `repository.py` (all Cypher, via `core/db.py`), with models from `trees/schemas.py`. Implement these endpoints. Use a hardcoded `owner_id = "dev-user"` for now (auth comes later). Endpoints: `POST /trees` (create Tree node in Neo4j, return TreeResponse), `GET /trees` (return all trees where owner_id matches), `GET /trees/{tree_id}` (return one tree or 404), `PATCH /trees/{tree_id}` (update name), `DELETE /trees/{tree_id}` (detach delete tree and all its Person nodes). Register the router in `main.py`.
+### 1.6 Tree CRUD endpoints [x]
+**Agent brief:** Implement the trees feature in `backend/app/trees.py` — schemas, routes, and Cypher (via `core/db.py`) all in this one file. Implement these endpoints. Use a hardcoded `owner_id = "dev-user"` for now (auth comes later). Endpoints: `POST /trees` (create Tree node in Neo4j, return TreeResponse), `GET /trees` (return all trees where owner_id matches), `GET /trees/{tree_id}` (return one tree or 404), `PATCH /trees/{tree_id}` (update name), `DELETE /trees/{tree_id}` (detach delete tree and all its Person nodes). Register the router in `main.py`.
 
 **Done when:** All five endpoints work correctly via the FastAPI docs UI (`/docs`). Create a tree, fetch it, rename it, delete it.
 
 ---
 
-### 1.7 People CRUD endpoints [ ]
-**Agent brief:** Implement the people feature in `backend/app/people/` (`router.py`, `service.py`, `repository.py`, `schemas.py`; same layering as trees, all Cypher in `repository.py`). All people belong to a tree (stored as `tree_id` property on Person nodes). Endpoints: `POST /trees/{tree_id}/people` (create Person node, return PersonResponse), `GET /trees/{tree_id}/people` (list all people in tree; support optional `?search=` query param that filters by name), `GET /trees/{tree_id}/people/{person_id}` (return one person or 404), `PATCH /trees/{tree_id}/people/{person_id}` (update person fields), `DELETE /trees/{tree_id}/people/{person_id}` (detach delete person node). Register the router in `main.py`.
+### 1.7 People CRUD endpoints [x]
+**Agent brief:** Implement the people feature in `backend/app/people.py` — schemas, routes, and Cypher in this one file, same pattern as `trees.py`. All people belong to a tree (stored as `tree_id` property on Person nodes). Endpoints: `POST /trees/{tree_id}/people` (create Person node, return PersonResponse), `GET /trees/{tree_id}/people` (list all people in tree; support optional `?search=` query param that filters by name), `GET /trees/{tree_id}/people/{person_id}` (return one person or 404), `PATCH /trees/{tree_id}/people/{person_id}` (update person fields), `DELETE /trees/{tree_id}/people/{person_id}` (detach delete person node). Register the router in `main.py`.
 
-**Tree isolation (see `design.md`):** every person lookup, update and delete must match on both `id` and `tree_id` (e.g. `MATCH (p:Person {id: $pid, tree_id: $tid})`), all parameterized; return 404 if no match. Create an index on `Person.id` and `Person.tree_id`. Every function in `people/repository.py` takes `tree_id`.
+**Tree isolation (see `design.md`):** every person lookup, update and delete must match on both `id` and `tree_id` (e.g. `MATCH (p:Person {id: $pid, tree_id: $tid})`), all parameterized; return 404 if no match. Create an index on `Person.id` and `Person.tree_id`. Every Cypher-touching function in `people.py` takes `tree_id`.
 
 **Done when:** All five endpoints work via `/docs`. Add 3 people to a tree, search for one by name, edit one, delete one. Requesting a person via a different tree's ID in the URL returns 404.
 
 ---
 
-### 1.8 Relationship CRUD endpoints [ ]
-**Agent brief:** Implement the relationships feature in `backend/app/relationships/` (`router.py`, `service.py`, `repository.py`, `schemas.py`; all Cypher in `repository.py`). Implement: `POST /trees/{tree_id}/relationships` — given `RelationshipCreate` body, create either a `PARENT_OF` or `MARRIED_TO` edge between the two people in Neo4j. Return `RelationshipResponse` including the Neo4j relationship element ID as `relationship_id`. `DELETE /trees/{tree_id}/relationships/{relationship_id}` — delete the relationship by its element ID. Validate that both people exist and belong to the specified tree before creating the relationship. Register the router in `main.py`.
+### 1.8 Relationship CRUD endpoints [x]
+**Agent brief:** Implement the relationships feature in `backend/app/relationships.py` — schemas, routes, and Cypher in this one file. Implement: `POST /trees/{tree_id}/relationships` — given `RelationshipCreate` body, create either a `PARENT_OF` or `MARRIED_TO` edge between the two people in Neo4j, generating a UUID in Python and storing it as an `id` property on the edge (same pattern as `Person.id` — see `design.md`; do NOT use `elementId(r)`, which is not guaranteed stable across restores/dumps/copies per Neo4j's own docs). Return `RelationshipResponse` including that `id` as `relationship_id`. `DELETE /trees/{tree_id}/relationships/{relationship_id}` — delete the relationship by matching on its `id` property, not `elementId()`. Validate that both people exist and belong to the specified tree before creating the relationship. Register the router in `main.py`.
 
 **Relationship enforcement (see `design.md`):**
 - Reject if `person_a_id == person_b_id` (no self-relationship), before any Cypher runs.
@@ -89,15 +89,15 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 1.9 User model + registration endpoint [ ]
-**Agent brief:** Store user accounts in Neo4j as `(:User {id, name, email, password_hash, created_at})` nodes (no separate relational database). On app startup, run `CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE` and an equivalent unique constraint on `User.id`. In `backend/app/auth/` (`router.py`, `service.py`, `repository.py`; hashing helpers in `core/security.py`; Cypher only in `repository.py`), implement `POST /auth/register`: accept `UserCreate`, hash the password with `pwdlib` using Argon2id (`PasswordHash.recommended()`, per OWASP and the FastAPI docs), create the User node with a parameterized query, catch the Neo4j constraint-violation error and return 400 if the email is already taken, and return `UserResponse` (never return the hash). Normalize emails to lowercase before storing. Register the router in `main.py`.
+### 1.9 User model + registration endpoint [x]
+**Agent brief:** Store user accounts in Neo4j as `(:User {id, name, email, password_hash, created_at})` nodes (no separate relational database). On app startup, run `CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE` and an equivalent unique constraint on `User.id`. In `backend/app/auth.py` (schemas, routes, and Cypher together; hashing helpers come from `core/security.py`), implement `POST /auth/register`: accept `UserCreate`, hash the password with `pwdlib` using Argon2id (`PasswordHash.recommended()`, per OWASP and the FastAPI docs), create the User node with a parameterized query, catch the Neo4j constraint-violation error and return 400 if the email is already taken, and return `UserResponse` (never return the hash). Normalize emails to lowercase before storing. Register the router in `main.py`.
 
 **Done when:** `POST /auth/register` with a new email returns 201 + user info. A second call with the same email returns 400. The User node appears in Aura Console with a hash, not a plain password.
 
 ---
 
 ### 1.10 JWT login, logout, refresh [ ]
-**Agent brief:** In `backend/app/auth/` (router → service → repository; JWT create/verify helpers in `core/security.py`), add: `POST /auth/login` — look up the User node by email in Neo4j, verify the password against `password_hash` with `pwdlib`, issue a signed JWT access token (expires in 1 hour) and a refresh token (expires in 7 days) using `PyJWT`. Use the same generic error for unknown email and wrong password. Return both tokens. `POST /auth/refresh` — accept a valid refresh token, return a new access token. `POST /auth/logout` — return 200 (stateless: client discards the token). In `backend/app/core/dependencies.py`, create a `get_current_user` FastAPI dependency that reads the Bearer token from the Authorization header, verifies it, and returns the user. Add a protected test route `GET /me` that requires `get_current_user` and returns the current user's info.
+**Agent brief:** In `backend/app/auth.py` (routes and Cypher together; JWT create/verify helpers in `core/security.py`), add: `POST /auth/login` — look up the User node by email in Neo4j, verify the password against `password_hash` with `pwdlib`, issue a signed JWT access token (expires in 1 hour) and a refresh token (expires in 7 days) using `PyJWT`. Use the same generic error for unknown email and wrong password. Return both tokens. `POST /auth/refresh` — accept a valid refresh token, return a new access token. `POST /auth/logout` — return 200 (stateless: client discards the token). In `backend/app/core/dependencies.py`, create a `get_current_user` FastAPI dependency that reads the Bearer token from the Authorization header, verifies it, and returns the user. Add a protected test route `GET /me` that requires `get_current_user` and returns the current user's info.
 
 **Done when:** Login returns tokens. `GET /me` with a valid token returns user info. `GET /me` with no token or an invalid token returns 401.
 
@@ -155,7 +155,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 2.7 Graph visualization (rough) [ ]
-**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in the `backend/app/analysis/` feature: router, service, repository). It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using the `cytoscape-fcose` layout (install `cytoscape-fcose`; it's a faster, better-scaling variant of `cose` — prefer it over plain `cose` from the start, since it also naturally spaces out distant/weakly-connected branches). Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
+**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in `backend/app/analysis.py`). [Backend piece built early, during Task 1.9's demo-page hookup — see schedule.md.] It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using the `cytoscape-fcose` layout (install `cytoscape-fcose`; it's a faster, better-scaling variant of `cose` — prefer it over plain `cose` from the start, since it also naturally spaces out distant/weakly-connected branches). Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
 
 **Done when:** Navigating to a tree renders the nodes and edges from seed data as a graph. The layout is messy but the nodes are there.
 
@@ -164,7 +164,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ## Phase 3 — Algorithm, Access Control, Security (~13 hrs, ~weeks 10–13)
 
 ### 3.1 Cypher BFS ancestor query [ ]
-**Agent brief:** In `backend/app/analysis/`, put the Cypher in `repository.py` (a `get_parents(person_ids, tree_id)` function that returns the parents of a whole set of people) and write `get_ancestors(person_id, tree_id)` in `service.py` to find all ancestors of a given person via `PARENT_OF` edges, bounded to 22 generations. Include the person themself at distance 0. Return a dict `{ancestor_id: set_of_distances}` (an ancestor reached at several distances keeps all of them).
+**Agent brief:** In `backend/app/analysis.py`, write a `get_parents(person_ids, tree_id)` function (Cypher, via `core/db.py`) that returns the parents of a whole set of people, and a `get_ancestors(person_id, tree_id)` function that uses it to find all ancestors of a given person via `PARENT_OF` edges, bounded to 22 generations. Include the person themself at distance 0. Return a dict `{ancestor_id: set_of_distances}` (an ancestor reached at several distances keeps all of them).
 
 **Pitfall — do NOT use a single variable-length pattern like `(a)-[:PARENT_OF*0..22]->(anc)`.** It enumerates every *route*, not every person. With cousin marriages (pedigree collapse), one ancestor can be reached by thousands or millions of routes, so the query becomes very slow even if `min()` is applied afterward (aggregation happens after all paths are found). Instead climb one generation at a time: keep a *set* of people at the current generation, run one parameterized query per generation fetching all their parents (`WHERE child.id IN $ids AND child.tree_id = $tree_id`), record the distance for each parent, and use that set of parents as the next generation. Stop at 22 rounds or when the set is empty. Sets dedupe, so work scales with distinct ancestors. Test on a small dataset with repeated cousin marriages, and use `PROFILE` if anything is slow. The query must be fully parameterized — no string interpolation. Test it manually against the seed data: run it for one person and verify the returned ancestors match what you built in the seed script.
 
@@ -173,23 +173,30 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 3.2 Ancestor intersection and path finding (Python) [ ]
-**Agent brief:** In `backend/app/analysis/algorithm.py` (pure Python, no database imports), write a function `find_common_ancestors(ancestors_a, ancestors_b)` that takes two ancestor dicts `{id: set_of_distances}` (each includes the person themself at distance 0, as returned by Task 3.1) and returns a list of `{ancestor_id, depth_a, depth_b}` for every common ancestor and every distinct (distance in A, distance in B) combination. Direct-line rule: if any common ancestor has distance 0 for either person, one is the other's ancestor, so return only the results where a distance is 0 and ignore the rest (see `design.md`). If both people are the same person, return an empty list (the API handles that case before calling). Write unit tests in `backend/tests/test_algorithm.py` covering: direct parent-child (one person is ancestor of the other, e.g. a child vs. their mother must not also return the grandparents as an uncle/aunt relationship), siblings (one common parent), first cousins (one common grandparent), and a double-cousin case (two common grandparents from different lines).
+**Agent brief:** In `backend/app/analysis.py`, write `find_common_ancestors` as a pure function — plain data in, plain data out, no database calls inside it (see `structure.md`) — so it stays unit-testable with plain dicts even though it lives in the same file as the route functions. `find_common_ancestors(ancestors_a, ancestors_b)` that takes two ancestor dicts `{id: set_of_distances}` (each includes the person themself at distance 0, as returned by Task 3.1) and returns a list of `{ancestor_id, depth_a, depth_b}` for every common ancestor and every distinct (distance in A, distance in B) combination. Direct-line rule: if any common ancestor has distance 0 for either person, one is the other's ancestor, so return only the results where a distance is 0 and ignore the rest (see `design.md`). If both people are the same person, return an empty list (the API handles that case before calling). Write unit tests in `backend/tests/test_algorithm.py` covering: direct parent-child (one person is ancestor of the other, e.g. a child vs. their mother must not also return the grandparents as an uncle/aunt relationship), siblings (one common parent), first cousins (one common grandparent), and a double-cousin case (two common grandparents from different lines).
 
 **Done when:** `pytest` passes all tests.
 
 ---
 
 ### 3.3 Relationship classification (Python) [ ]
-**Agent brief:** In `backend/app/analysis/algorithm.py`, write a function `classify_relationship(depth_a, depth_b)` that takes two generation distances and returns a human-readable relationship label string. Rules: if one depth is 0 and other is 1 → "parent" or "child"; both 1 → "sibling"; one is 2 and other is 1 → "aunt/uncle" or "niece/nephew"; both equal n≥2 → "{n-1} cousin" (e.g., both 2 → "1st cousin", both 3 → "2nd cousin"); unequal where both≥2 → "{min-1} cousin {|diff|} times removed". Write unit tests for all these cases plus a "2nd cousin once removed" case.
+**Agent brief:** In `backend/app/analysis.py`, write a function `classify_relationship(depth_a, depth_b)` that takes two generation distances and returns a human-readable relationship label string. Rules: if one depth is 0 and other is 1 → "parent" or "child"; both 1 → "sibling"; one is 2 and other is 1 → "aunt/uncle" or "niece/nephew"; both equal n≥2 → "{n-1} cousin" (e.g., both 2 → "1st cousin", both 3 → "2nd cousin"); unequal where both≥2 → "{min-1} cousin {|diff|} times removed". Write unit tests for all these cases plus a "2nd cousin once removed" case.
 
 **Done when:** `pytest` passes all classification tests.
 
 ---
 
 ### 3.4 Relationship-path API endpoint [ ]
-**Agent brief:** In `backend/app/analysis/` (`router.py` calls `service.py`, which orchestrates), implement `GET /trees/{tree_id}/relationship-path?person_a={id}&person_b={id}`. It should: call `get_ancestors` for both people, call `find_common_ancestors`, then call `classify_relationship` for each common ancestor, and return a list of `{ancestor_id, ancestor_name, label}` objects. If no common ancestors are found, return an empty list with a message. Require authentication. Test against seed data for the cousin-marriage pair — should return multiple paths.
+**Agent brief:** In `backend/app/analysis.py`, implement `GET /trees/{tree_id}/relationship-path?person_a={id}&person_b={id}`. It should: call `get_ancestors` for both people, call `find_common_ancestors`, then call `classify_relationship` for each common ancestor, and return a list of `{ancestor_id, ancestor_name, label}` objects. If no common ancestors are found, return an empty list with a message. Require authentication. Test against seed data for the cousin-marriage pair — should return multiple paths.
 
 **Done when:** The endpoint returns multiple relationship paths for the cousin-marriage pair in the seed data, with correct labels.
+
+---
+
+### 3.x Re-evaluate flat vs. layered structure (do this first, before 3.5) [ ]
+Before building access control (3.5–3.7), stop and reconsider the flat one-file-per-feature structure (see `structure.md`) against the router/service/repository split that was deliberately dropped back at Task 1.6. The reason to revisit now: access control is exactly the kind of cross-cutting rule ("editor can write, viewer can't") that was flagged as the trigger for needing a shared place for logic, rather than copy-pasting the same check into every route across `people.py`, `relationships.py`, `trees.py`, `access.py`. Decision: if the check is small enough to stay a single shared function (likely living in `core/dependencies.py`, already planned) called from each route, keep the flat structure. Only reintroduce a `service.py`-style layer if that shared logic grows complex enough that copy-pasting a one-line dependency call into each route genuinely becomes the problem — not before. Write the decision and reasoning into `design.md`'s "Backend Layering" section either way, so it's not re-litigated again later without cause.
+
+**Done when:** A clear decision is written down (stay flat, or introduce a shared layer — and if so, how much of one) before any access-control code is written.
 
 ---
 
@@ -201,14 +208,14 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 3.6 Access control endpoints [ ]
-**Agent brief:** In a new `backend/app/access/` feature (`router.py`, `service.py`, `repository.py`, `schemas.py`), implement the sharing endpoints. `POST /trees/{tree_id}/access` — body: `{email, role}`. Look up the target User node by (lowercased) email in Neo4j, then create a `HAS_ACCESS {role}` relationship from their User node to the Tree node. Only the tree owner can call this. `GET /trees/{tree_id}/access` — return list of `{user_id, name, role}` for all users with access (include `email` only when the requester is the owner). `PATCH /trees/{tree_id}/access/{user_id}` — update the role property on the HAS_ACCESS relationship. `DELETE /trees/{tree_id}/access/{user_id}` — remove the HAS_ACCESS relationship. Owner cannot remove themselves.
+**Agent brief:** In a new `backend/app/access.py` file (schemas, routes, and Cypher together), implement the sharing endpoints. `POST /trees/{tree_id}/access` — body: `{email, role}`. Look up the target User node by (lowercased) email in Neo4j, then create a `HAS_ACCESS {role}` relationship from their User node to the Tree node. Only the tree owner can call this. `GET /trees/{tree_id}/access` — return list of `{user_id, name, role}` for all users with access (include `email` only when the requester is the owner). `PATCH /trees/{tree_id}/access/{user_id}` — update the role property on the HAS_ACCESS relationship. `DELETE /trees/{tree_id}/access/{user_id}` — remove the HAS_ACCESS relationship. Owner cannot remove themselves.
 
 **Done when:** Can grant editor access to a second test user, verify they can see the tree, then revoke it.
 
 ---
 
 ### 3.7 Access enforcement [ ]
-**Agent brief:** Update `backend/app/core/dependencies.py` (the tree-access lookup itself belongs in `access/repository.py`). Replace the stub `get_accessible_trees` with a real implementation: query Neo4j for all Trees the current user has a `HAS_ACCESS` relationship to (any role). Inject this dependency into all `/trees/**` endpoints. For write operations (POST/PATCH/DELETE on people, relationships), add a check that the current user's role on that tree is "editor" or "owner" — return 403 if not. For read operations, any role (including "viewer") is sufficient.
+**Agent brief:** Update `backend/app/core/dependencies.py` (the tree-access lookup itself can call a function defined in `access.py`). Replace the stub `get_accessible_trees` with a real implementation: query Neo4j for all Trees the current user has a `HAS_ACCESS` relationship to (any role). Inject this dependency into all `/trees/**` endpoints. For write operations (POST/PATCH/DELETE on people, relationships), add a check that the current user's role on that tree is "editor" or "owner" — return 403 if not. For read operations, any role (including "viewer") is sufficient.
 
 **Cross-tree test:** with two users each owning a tree, user A must get 403/404 on every tree B endpoint (people, relationships, graph, relationship-path, access), including when using a valid tree B person ID in a URL under tree A. Add this as a pytest test or a written manual checklist.
 
@@ -217,7 +224,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 3.8 Security hardening [ ]
-**Agent brief:** Audit the backend for these security issues and fix any found: (1) Cypher injection — search all `.py` files for any Cypher queries built with string formatting or f-strings; replace with parameterized queries using the `neo4j` driver's parameter syntax `{param_name}`. (2) CORS — in `main.py`, configure `CORSMiddleware` to allow only `http://localhost:5173` (dev) and the production frontend URL (placeholder for now). (3) Auth endpoint rate limiting — add `slowapi` rate limiting to `POST /auth/login` and `POST /auth/register`. (4) `.gitignore` — verify `.env` is listed (plus `.venv/`, `__pycache__/`, `node_modules/`). (5) Create `.env.example` with all required env var names and placeholder values.
+**Agent brief:** Audit the backend for these security issues and fix any found: (0) Email validation — in `auth.py`, change `UserCreate.email` from plain `str` to Pydantic's `EmailStr` (requires the `email-validator` package; add it to `requirements.txt`), so a malformed email is rejected at the API boundary instead of being stored as-is. (This was deliberately left as a plain `str` in Task 1.5 — fix it here, alongside the other security items, rather than earlier.) (1) Cypher injection — search all `.py` files for any Cypher queries built with string formatting or f-strings; replace with parameterized queries using the `neo4j` driver's parameter syntax `{param_name}`. (2) CORS — in `main.py`, configure `CORSMiddleware` to allow only `http://localhost:5173` (dev) and the production frontend URL (placeholder for now). (3) Auth endpoint rate limiting — add `slowapi` rate limiting to `POST /auth/login` and `POST /auth/register`. (4) `.gitignore` — verify `.env` is listed (plus `.venv/`, `__pycache__/`, `node_modules/`). (5) Create `.env.example` with all required env var names and placeholder values.
 
 **Done when:** Grep for f-string Cypher queries returns nothing. CORS rejects requests from an unlisted origin. `.env` is not tracked by git.
 
@@ -322,7 +329,7 @@ Review completed tasks. Note anything that was marked done but wasn't fully veri
 The implementation report needs to explain: data model choices (why no Family node), the algorithm (ancestor intersection approach), security measures implemented, and validation methodology (what the unit tests cover and why representative coverage is sufficient). Use `design.md` and `requirements.md` as source material.
 
 ### 6.3 Extended Person fields [ ]
-Add the extra Person properties from the original data model notes: gender, full date of birth, Hebrew birthday, date of death (yahrzeit), and places lived. Update `people/schemas.py`, `people/repository.py`, `PersonForm.jsx` and `PersonPanel.jsx`. Open decisions to settle first: how vague historical dates (e.g. "approximately 1500s") are stored alongside full dates, and whether the Hebrew date is entered or calculated from the regular date. The current Person fields are enough until then.
+Add the extra Person properties from the original data model notes: gender, full date of birth, Hebrew birthday, date of death (yahrzeit), and places lived. Update `people.py`, `PersonForm.jsx` and `PersonPanel.jsx`. Open decisions to settle first: how vague historical dates (e.g. "approximately 1500s") are stored alongside full dates, and whether the Hebrew date is entered or calculated from the regular date. The current Person fields are enough until then.
 
 ### 6.5 "Home person" default focus (UI extra) [ ]
 Give the graph view a sensible default center when no `root_person_id` is passed — not a root in the data-structure sense (the graph has none, and this has no security meaning), purely a UI convenience computed on the fly, not stored. Add a repository/service function that computes a reasonable default each time it's requested, e.g. the person with the most generations beneath them (largest descendant depth), or most total descendants — run as a query at request time, not persisted on the Tree node. Wire `GET /trees/{tree_id}/graph` to use this when `root_person_id` is omitted. Nice-to-have, not required for the demo; revisit the exact "biggest generation chain" metric when this is picked up.

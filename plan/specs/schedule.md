@@ -37,6 +37,8 @@ Add a row each session. Use it to recompute the projected finish at each checkpo
 |---|---|---|---|---|
 | 2026-10-20 | 1.1 Cypher spike | 2 | 1.5 | Done; found direct-line (distance 0) rule and path-explosion pitfall |
 | 2026-10-20 | 1.2 Python scaffold | 1 | 0.75 | Done by agent; time = reviewing + running it |
+| 2026-10-21 | 1.3 Neo4j connection | 1.5 | 0.75 | Built, tested against real AuraDB |
+| 2026-10-21 | 1.4 Seed script (20 people) | 1.5 | 0.5 | First version had a cousin-structure bug, caught and fixed; verified Eli/Ivy share grandparents |
 
 ## Open
 - Hard deadline date: **TBD**. Not needed while scope is fixed, but it decides when cuts would become necessary.
