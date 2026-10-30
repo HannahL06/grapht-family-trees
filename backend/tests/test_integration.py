@@ -1,6 +1,6 @@
 """Integration tests: these make real calls against the configured AuraDB
-instance (Tasks 1.6/1.7/1.8/1.9). Each test creates and cleans up its own
-tree(s)/people/users — nothing here touches the sample-fam seed data.
+instance (Tasks 1.6/1.7/1.8/1.9/1.10). Each test creates and cleans up its
+own tree(s)/people/users — nothing here touches the sample-fam seed data.
 
 Uses the `client` fixture from conftest.py, which triggers FastAPI's
 lifespan (ensure_person_indexes() runs against the real database on
@@ -60,6 +60,85 @@ def test_register_normalizes_email_to_lowercase(register_user):
     resp = register_user(email=email.upper())
     assert resp.status_code == 201
     assert resp.json()["email"] == email.lower()
+
+
+# --- Login / JWT (Task 1.10) --------------------------------------------
+
+LOGIN_PASSWORD = "correct-horse-battery-staple"
+
+
+@pytest.fixture
+def logged_in_user(client, register_user):
+    email = f"login-{uuid.uuid4()}@example.com"
+    register_user(email=email, password=LOGIN_PASSWORD)
+    tokens = client.post(
+        "/auth/login", json={"email": email, "password": LOGIN_PASSWORD}
+    ).json()
+    return email, tokens
+
+
+def test_login_returns_tokens(logged_in_user):
+    _email, tokens = logged_in_user
+    assert "access_token" in tokens
+    assert "refresh_token" in tokens
+    assert tokens["token_type"] == "bearer"
+
+
+def test_login_wrong_password_rejected(client, register_user):
+    email = f"wrongpw-{uuid.uuid4()}@example.com"
+    register_user(email=email, password=LOGIN_PASSWORD)
+    r = client.post("/auth/login", json={"email": email, "password": "not-the-password"})
+    assert r.status_code == 401
+
+
+def test_login_unknown_email_rejected(client):
+    r = client.post(
+        "/auth/login", json={"email": "nobody-at-all@example.com", "password": "x"}
+    )
+    assert r.status_code == 401
+
+
+def test_me_with_valid_token(client, logged_in_user):
+    email, tokens = logged_in_user
+    r = client.get("/me", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    assert r.status_code == 200
+    assert r.json()["email"] == email
+
+
+def test_me_without_token_rejected(client):
+    r = client.get("/me")
+    assert r.status_code == 401
+
+
+def test_me_with_garbage_token_rejected(client):
+    r = client.get("/me", headers={"Authorization": "Bearer garbage.not.valid"})
+    assert r.status_code == 401
+
+
+def test_me_with_refresh_token_rejected(client, logged_in_user):
+    """A refresh token must not work as an access token, even though both
+    are valid, correctly-signed JWTs — only the `type` claim tells them apart."""
+    _email, tokens = logged_in_user
+    r = client.get("/me", headers={"Authorization": f"Bearer {tokens['refresh_token']}"})
+    assert r.status_code == 401
+
+
+def test_refresh_issues_new_access_token(client, logged_in_user):
+    _email, tokens = logged_in_user
+    r = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert r.status_code == 200
+    assert "access_token" in r.json()
+
+
+def test_refresh_with_access_token_rejected(client, logged_in_user):
+    _email, tokens = logged_in_user
+    r = client.post("/auth/refresh", json={"refresh_token": tokens["access_token"]})
+    assert r.status_code == 401
+
+
+def test_logout_returns_200(client):
+    r = client.post("/auth/logout")
+    assert r.status_code == 200
 
 
 # --- Trees (Task 1.6) -------------------------------------------------

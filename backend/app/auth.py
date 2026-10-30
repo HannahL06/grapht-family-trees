@@ -1,12 +1,20 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+import jwt
+from fastapi import APIRouter, Depends, HTTPException
 from neo4j.exceptions import ConstraintError
 from pydantic import BaseModel
 
 from app.core.db import run_query
-from app.core.security import hash_password
+from app.core.dependencies import get_current_user
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter()
 
@@ -58,3 +66,76 @@ def register(body: UserCreate):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     return user
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+def login(body: LoginRequest):
+    rows = run_query(
+        "MATCH (u:User {email: $email}) RETURN u.id AS id, u.password_hash AS password_hash",
+        {"email": body.email.lower()},
+    )
+    # Same generic error whether the email doesn't exist or the password is
+    # wrong — telling them apart would let an attacker discover which
+    # emails are registered.
+    invalid = HTTPException(status_code=401, detail="Invalid email or password")
+    if not rows:
+        raise invalid
+    user = rows[0]
+    if not verify_password(body.password, user["password_hash"]):
+        raise invalid
+
+    return {
+        "access_token": create_access_token(user["id"]),
+        "refresh_token": create_refresh_token(user["id"]),
+    }
+
+
+@router.post("/auth/refresh", response_model=AccessTokenResponse)
+def refresh(body: RefreshRequest):
+    try:
+        payload = decode_token(body.refresh_token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
+    rows = run_query("MATCH (u:User {id: $id}) RETURN u.id AS id", {"id": payload["sub"]})
+    if not rows:
+        raise HTTPException(status_code=401, detail="User no longer exists")
+
+    return {"access_token": create_access_token(payload["sub"])}
+
+
+@router.post("/auth/logout")
+def logout():
+    # Stateless JWTs: there's nothing stored server-side to invalidate.
+    # The client is responsible for discarding the token.
+    return {"status": "logged out"}
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: dict = Depends(get_current_user)):
+    return current_user

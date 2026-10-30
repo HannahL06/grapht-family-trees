@@ -96,7 +96,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 1.10 JWT login, logout, refresh [ ]
+### 1.10 JWT login, logout, refresh [x]
 **Agent brief:** In `backend/app/auth.py` (routes and Cypher together; JWT create/verify helpers in `core/security.py`), add: `POST /auth/login` — look up the User node by email in Neo4j, verify the password against `password_hash` with `pwdlib`, issue a signed JWT access token (expires in 1 hour) and a refresh token (expires in 7 days) using `PyJWT`. Use the same generic error for unknown email and wrong password. Return both tokens. `POST /auth/refresh` — accept a valid refresh token, return a new access token. `POST /auth/logout` — return 200 (stateless: client discards the token). In `backend/app/core/dependencies.py`, create a `get_current_user` FastAPI dependency that reads the Bearer token from the Authorization header, verifies it, and returns the user. Add a protected test route `GET /me` that requires `get_current_user` and returns the current user's info.
 
 **Done when:** Login returns tokens. `GET /me` with a valid token returns user info. `GET /me` with no token or an invalid token returns 401.
