@@ -1,11 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.db import run_query
+from app.core.dependencies import require_tree_access
 
-router = APIRouter()
+# Every route here is under /trees/{tree_id}/..., so the access check is
+# attached to the whole router: no route in this file can forget it.
+router = APIRouter(dependencies=[Depends(require_tree_access)])
 
 
 def ensure_person_indexes() -> None:

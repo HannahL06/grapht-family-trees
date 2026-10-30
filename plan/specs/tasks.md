@@ -103,7 +103,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 1.11 Wire auth into tree endpoints (stub access guard) [ ]
+### 1.11 Wire auth into tree endpoints (stub access guard) [x]
 **Agent brief:** Update all `/trees/**` endpoints to require authentication via the `get_current_user` dependency. Replace the hardcoded `owner_id = "dev-user"` with the actual `current_user.id` from the dependency. For now, scope all tree queries to only return/modify trees where `owner_id == current_user.id` (full role-based sharing comes in Phase 3). This is a temporary stub — the comment `# TODO: Phase 3 — expand to include shared trees` should be left where the access check is.
 
 **Done when:** Creating a tree while logged in saves the correct owner. Fetching `/trees` only returns that user's trees. Accessing another user's tree returns 403.
