@@ -112,14 +112,14 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ## Phase 2 — Preliminary UI (~10 hrs, ~weeks 7–9)
 
-### 2.1 React + Vite project setup [ ]
+### 2.1 React + Vite project setup [x]
 **Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `cytoscape`. Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **with the `/api` prefix stripped** (Vite proxy option `rewrite: (path) => path.replace(/^\/api/, '')`). The backend's routes are `/trees`, `/auth/...` and `/me` with no `/api` prefix, so without the rewrite every call would 404. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
 
 **Done when:** `npm run dev` starts the dev server, browser shows "Grapht", no console errors.
 
 ---
 
-### 2.2 API client + auth API module [ ]
+### 2.2 API client + auth API module [x]
 **Agent brief:** Create `frontend/src/api/client.js`: an Axios instance with `baseURL: '/api'`. Add a request interceptor that reads the JWT access token from `localStorage` (key: `"access_token"`) and attaches it as `Authorization: Bearer <token>` if present. Add a response interceptor for expired sessions: on a 401 response, clear the stored tokens and redirect to `/login` — **except** for requests to `/auth/login` and `/auth/register`, where a 401/400 is an expected "wrong password / email taken" error that the page must display, not a redirect trigger. (Access tokens expire after 1 hour; silently using the refresh token is deferred to a later task.) Create `frontend/src/api/auth.js` with three functions: `register(name, email, password)` (registration requires `name`), `login(email, password)` (stores both returned `access_token` and `refresh_token` in localStorage), `logout()` (clears localStorage tokens). `register` does NOT return tokens, so it does not log the user in by itself.
 
 **Done when:** Can call `login()` from the browser console, token appears in localStorage, and a subsequent API call includes the header. A request made with an expired or invalid token clears the tokens and lands on `/login`.
