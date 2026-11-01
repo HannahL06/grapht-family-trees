@@ -113,30 +113,30 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ## Phase 2 — Preliminary UI (~10 hrs, ~weeks 7–9)
 
 ### 2.1 React + Vite project setup [ ]
-**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `cytoscape`. Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000`. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
+**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `cytoscape`. Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **with the `/api` prefix stripped** (Vite proxy option `rewrite: (path) => path.replace(/^\/api/, '')`). The backend's routes are `/trees`, `/auth/...` and `/me` with no `/api` prefix, so without the rewrite every call would 404. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
 
 **Done when:** `npm run dev` starts the dev server, browser shows "Grapht", no console errors.
 
 ---
 
 ### 2.2 API client + auth API module [ ]
-**Agent brief:** Create `frontend/src/api/client.js`: an Axios instance with `baseURL: '/api'`. Add a request interceptor that reads the JWT access token from `localStorage` (key: `"access_token"`) and attaches it as `Authorization: Bearer <token>` if present. Create `frontend/src/api/auth.js` with three functions: `register(email, password)`, `login(email, password)` (stores returned tokens in localStorage), `logout()` (clears localStorage tokens).
+**Agent brief:** Create `frontend/src/api/client.js`: an Axios instance with `baseURL: '/api'`. Add a request interceptor that reads the JWT access token from `localStorage` (key: `"access_token"`) and attaches it as `Authorization: Bearer <token>` if present. Add a response interceptor for expired sessions: on a 401 response, clear the stored tokens and redirect to `/login` — **except** for requests to `/auth/login` and `/auth/register`, where a 401/400 is an expected "wrong password / email taken" error that the page must display, not a redirect trigger. (Access tokens expire after 1 hour; silently using the refresh token is deferred to a later task.) Create `frontend/src/api/auth.js` with three functions: `register(name, email, password)` (registration requires `name`), `login(email, password)` (stores both returned `access_token` and `refresh_token` in localStorage), `logout()` (clears localStorage tokens). `register` does NOT return tokens, so it does not log the user in by itself.
 
-**Done when:** Can call `login()` from the browser console, token appears in localStorage, and a subsequent API call includes the header.
+**Done when:** Can call `login()` from the browser console, token appears in localStorage, and a subsequent API call includes the header. A request made with an expired or invalid token clears the tokens and lands on `/login`.
 
 ---
 
 ### 2.3 Login and Register pages + routing [ ]
-**Agent brief:** Create `frontend/src/pages/LoginPage.jsx` and `RegisterPage.jsx`. Each should have a simple form (email + password fields, plus a name field on the register page, submit button) that calls the corresponding auth API function. On success, redirect to `/trees`. On error, show the error message. In `App.jsx`, set up React Router with routes: `/login` → LoginPage, `/register` → RegisterPage, `/trees` → placeholder "Trees page" div, `/` → redirect to `/login`. No styling required — functional only.
+**Agent brief:** Create `frontend/src/pages/LoginPage.jsx` and `RegisterPage.jsx`. Each should have a simple form (email + password fields, plus a name field on the register page, submit button) that calls the corresponding auth API function. On success, redirect to `/trees`. On error, show the error message. **Register must call `login(email, password)` immediately after a successful `register(...)`** (the register endpoint returns no tokens), then redirect to `/trees`. In `App.jsx`, set up React Router with routes: `/login` → LoginPage, `/register` → RegisterPage, `/trees` → placeholder "Trees page" div, `/` → redirect to `/login`. **Add a small `ProtectedRoute` wrapper that redirects to `/login` when there is no `access_token` in localStorage, and wrap `/trees` (and later `/trees/:id`) in it** so a logged-out visit never shows a page that just fails with 401. No styling required — functional only.
 
-**Done when:** Can register a new user, get redirected to `/trees`, log in with that user from the login page.
+**Done when:** Can register a new user and land on `/trees` already logged in, and log in with that user from the login page. Visiting `/trees` while logged out redirects to `/login`. A wrong password shows an error on the login page instead of redirecting.
 
 ---
 
 ### 2.4 Tree list and create page [ ]
-**Agent brief:** Create `frontend/src/pages/TreesPage.jsx`. On mount, call `GET /trees` and display a list of tree names. Include a simple form (just a name input) to create a new tree via `POST /trees`. After creating, refresh the list. Add a link from each tree name to `/trees/:id`. Create `frontend/src/api/trees.js` with `getTrees()` and `createTree(name)` functions.
+**Agent brief:** Create `frontend/src/pages/TreesPage.jsx`. On mount, call `GET /trees` and display a list of tree names. Include a simple form (just a name input) to create a new tree via `POST /trees`. After creating, refresh the list. Add a link from each tree name to `/trees/:id`. Create `frontend/src/api/trees.js` with `getTrees()` and `createTree(name)` functions. Both endpoints require login; the Task 2.2 client attaches the token automatically. The `/trees/:id` link target (TreeView) doesn't exist until Task 2.5, so following it before then lands on an empty route — expected.
 
-**Done when:** Trees page loads, shows existing trees, create form works, new tree appears in the list.
+**Done when:** Trees page loads, shows existing trees (only the logged-in user's own), create form works, new tree appears in the list.
 
 ---
 

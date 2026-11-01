@@ -20,6 +20,15 @@
     <h2>Grapht</h2>
     <div id="status"></div>
 
+    <fieldset id="login-box">
+      <legend>Log in</legend>
+      <label>Email <input id="login-email" type="email" autocomplete="username" /></label>
+      <label>Password <input id="login-password" type="password" autocomplete="current-password" /></label>
+      <button onclick="login()">Log in</button>
+    </fieldset>
+
+    <div id="app-forms" hidden>
+
     <fieldset>
       <legend>Add person</legend>
       <label>Name <input id="person-name" /></label>
@@ -73,6 +82,7 @@
       </label>
       <button onclick="linkParent()">Link as parent</button>
     </fieldset>
+    </div>
   </div>
   <div id="graph"></div>
 
@@ -83,6 +93,47 @@
     const TREE_ID = 'sample-fam';
     let cy;
 
+    // Held in memory only, so reloading the page means logging in again.
+    // That's fine for a demo page and avoids storing a token in localStorage.
+    let accessToken = null;
+
+    // Every data call goes through here so none can forget the token.
+    async function api(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        showLogin('Session expired. Please log in again.');
+        throw new Error('unauthorized');
+      }
+      return res;
+    }
+
+    function showLogin(message) {
+      accessToken = null;
+      document.getElementById('login-box').hidden = false;
+      document.getElementById('app-forms').hidden = true;
+      if (message) setStatus(message, true);
+    }
+
+    async function login() {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      if (!email || !password) return setStatus('Enter your email and password.', true);
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) return setStatus('Login failed. Check your email and password.', true);
+      accessToken = (await res.json()).access_token;
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-box').hidden = true;
+      document.getElementById('app-forms').hidden = false;
+      setStatus('Logged in.');
+      await refreshGraph();
+    }
+
     function setStatus(msg, isError) {
       const el = document.getElementById('status');
       el.textContent = msg;
@@ -90,7 +141,7 @@
     }
 
     async function createRelationship(personAId, personBId, type) {
-      return fetch(`/trees/${TREE_ID}/relationships`, {
+      return api(`/trees/${TREE_ID}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ person_a_id: personAId, person_b_id: personBId, type }),
@@ -98,7 +149,7 @@
     }
 
     async function refreshGraph() {
-      const res = await fetch(`/trees/${TREE_ID}/graph`);
+      const res = await api(`/trees/${TREE_ID}/graph`);
       const data = await res.json();
 
       const nodeEls = data.nodes.map(n => ({ data: { id: n.id, label: n.name } }));
@@ -145,7 +196,7 @@
     }
 
     async function refreshPeopleDropdowns() {
-      const res = await fetch(`/trees/${TREE_ID}/people`);
+      const res = await api(`/trees/${TREE_ID}/people`);
       const people = await res.json();
       const options = people.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
@@ -163,7 +214,7 @@
       const name = document.getElementById('person-name').value.trim();
       if (!name) return setStatus('Name is required.', true);
       const birth_year = document.getElementById('person-birth-year').value || null;
-      const res = await fetch(`/trees/${TREE_ID}/people`, {
+      const res = await api(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -182,7 +233,7 @@
       if (!person_id || !name) return setStatus('Pick a person and enter a spouse name.', true);
       const birth_year = document.getElementById('spouse-birth-year').value || null;
 
-      const createRes = await fetch(`/trees/${TREE_ID}/people`, {
+      const createRes = await api(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -207,7 +258,7 @@
       if (!parent_id || !name) return setStatus('Pick a parent and enter a child name.', true);
       const birth_year = document.getElementById('child-birth-year').value || null;
 
-      const createRes = await fetch(`/trees/${TREE_ID}/people`, {
+      const createRes = await api(`/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -257,7 +308,7 @@
       await refreshGraph();
     }
 
-    refreshGraph();
+    // Nothing loads until login() succeeds and calls refreshGraph().
   </script>
 </body>
 </html>

@@ -17,8 +17,9 @@ Structure (20 people, 4 generations):
 import uuid
 
 from app.core.db import run_query
+from seed.demo_account import DEMO_EMAIL, ensure_demo_account
 
-TREE_ID = "sample"
+TREE_ID = "sample-fam"
 
 
 def person(name: str, birth_year: int | None = None) -> dict:
@@ -117,6 +118,11 @@ def main() -> None:
     print(f"Cousin-marriage pair (share grandparents Ada & Bram): "
           f"Eli ({eli['id']}) and Ivy ({ivy['id']}).")
     print(f"Unrelated person for negative tests: Jon ({jon['id']}).")
+
+    # main() wiped the whole database, including users and trees, so the
+    # demo account has to be recreated for the demo page to work.
+    ensure_demo_account(TREE_ID)
+    print(f"Demo account recreated: {DEMO_EMAIL} owns tree '{TREE_ID}'.")
 
 
 if __name__ == "__main__":
