@@ -122,7 +122,9 @@ RETURN ancestor.id AS ancestor_id, length(path) AS depth
 ## API Design
 
 ### URL structure
-All tree-scoped resources live under `/trees/{tree_id}/`.
+Every data route is served under the `/api` prefix (e.g. `/api/trees`, `/api/auth/login`, `/api/me`), and so are the generated docs (`/api/docs`). The frontend's dev proxy and any production reverse proxy forward `/api/*` unchanged. `GET /` (health check) and `/demo` stay unprefixed. The prefix also keeps API calls separate from React page URLs like `/trees`.
+
+All tree-scoped resources live under `/api/trees/{tree_id}/`.
 Authorization is enforced at the tree level via the `get_accessible_trees` dependency.
 
 ### Key endpoint decisions
@@ -150,11 +152,18 @@ See `plan/original-spec.md` → "API Endpoint List" section.
 No Redux/Zustand for MVP — React component state + prop passing is sufficient at this scale.
 If it gets unwieldy in Phase 4, add Zustand (lightweight).
 
-### Cytoscape.js integration
-- Wrapped in a `TreeGraph` React component
-- Graph data passed as props: `{ nodes: [...], edges: [...] }`
-- Layout toggled via a prop: `"force"` or `"hierarchical"`
-- Node click fires a callback → updates selected person in parent state → opens `PersonPanel`
+### Graph rendering: Sigma.js + graphology
+**Decision (changed from Cytoscape.js):** the graph is rendered with Sigma.js (WebGL) on top of a graphology graph. Reason: trees larger than 2,500 people are an explicit goal and a differentiator for the app, and Sigma is built for large graphs. Switching was cheapest before any React graph code existed.
+
+- Wrapped in a `TreeGraph` React component; Sigma is created/destroyed in `useEffect` because it owns its own canvas.
+- Graph data passed as props: `{ nodes: [...], edges: [...] }`, loaded into a graphology graph; later changes add only new nodes/edges.
+- Sigma is a **renderer only** — layouts come from separate packages: ForceAtlas2 (`graphology-layout-forceatlas2`, run in a web worker) for the force view, and `dagre` positions written onto the nodes for the hierarchical "traditional tree" view. Layout toggled via a prop: `"force"` or `"tree"`.
+- `MARRIED_TO` edges are dashed via Sigma 4's `layerDashed`/`createEdgeProgram`; `PARENT_OF` edges stay solid.
+- Collapse/expand is done by toggling the `hidden` attribute on graphology nodes/edges.
+- Node click fires a callback (Sigma's `clickNode` event) → updates selected person in parent state → opens `PersonPanel`.
+- Trade-off accepted: more assembly than Cytoscape (renderer + layout packages + hand-built collapse/expand), in exchange for headroom at scale.
+- Rendering speed is only one limit on large trees. Fetching, laying out and drawing the whole tree at 10,000+ people will also need loading a part of the tree at a time (the `/graph` endpoint's planned root-person/depth options) and clustering when zoomed out.
+- The `/demo` page is separate throwaway code and still uses Cytoscape from a CDN; it is not part of this decision.
 
 ---
 

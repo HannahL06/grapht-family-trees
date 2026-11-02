@@ -24,7 +24,7 @@ def register_user(client):
         if email is None:
             email = f"test-{uuid.uuid4()}@example.com"
         resp = client.post(
-            "/auth/register", json={"name": name, "email": email, "password": password}
+            "/api/auth/register", json={"name": name, "email": email, "password": password}
         )
         if resp.status_code == 201:
             created_emails.append(email.lower())
@@ -72,7 +72,7 @@ def logged_in_user(client, register_user):
     email = f"login-{uuid.uuid4()}@example.com"
     register_user(email=email, password=LOGIN_PASSWORD)
     tokens = client.post(
-        "/auth/login", json={"email": email, "password": LOGIN_PASSWORD}
+        "/api/auth/login", json={"email": email, "password": LOGIN_PASSWORD}
     ).json()
     return email, tokens
 
@@ -87,31 +87,31 @@ def test_login_returns_tokens(logged_in_user):
 def test_login_wrong_password_rejected(client, register_user):
     email = f"wrongpw-{uuid.uuid4()}@example.com"
     register_user(email=email, password=LOGIN_PASSWORD)
-    r = client.post("/auth/login", json={"email": email, "password": "not-the-password"})
+    r = client.post("/api/auth/login", json={"email": email, "password": "not-the-password"})
     assert r.status_code == 401
 
 
 def test_login_unknown_email_rejected(client):
     r = client.post(
-        "/auth/login", json={"email": "nobody-at-all@example.com", "password": "x"}
+        "/api/auth/login", json={"email": "nobody-at-all@example.com", "password": "x"}
     )
     assert r.status_code == 401
 
 
 def test_me_with_valid_token(client, logged_in_user):
     email, tokens = logged_in_user
-    r = client.get("/me", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    r = client.get("/api/me", headers={"Authorization": f"Bearer {tokens['access_token']}"})
     assert r.status_code == 200
     assert r.json()["email"] == email
 
 
 def test_me_without_token_rejected(client):
-    r = client.get("/me")
+    r = client.get("/api/me")
     assert r.status_code == 401
 
 
 def test_me_with_garbage_token_rejected(client):
-    r = client.get("/me", headers={"Authorization": "Bearer garbage.not.valid"})
+    r = client.get("/api/me", headers={"Authorization": "Bearer garbage.not.valid"})
     assert r.status_code == 401
 
 
@@ -119,69 +119,69 @@ def test_me_with_refresh_token_rejected(client, logged_in_user):
     """A refresh token must not work as an access token, even though both
     are valid, correctly-signed JWTs — only the `type` claim tells them apart."""
     _email, tokens = logged_in_user
-    r = client.get("/me", headers={"Authorization": f"Bearer {tokens['refresh_token']}"})
+    r = client.get("/api/me", headers={"Authorization": f"Bearer {tokens['refresh_token']}"})
     assert r.status_code == 401
 
 
 def test_refresh_issues_new_access_token(client, logged_in_user):
     _email, tokens = logged_in_user
-    r = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    r = client.post("/api/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert r.status_code == 200
     assert "access_token" in r.json()
 
 
 def test_refresh_with_access_token_rejected(client, logged_in_user):
     _email, tokens = logged_in_user
-    r = client.post("/auth/refresh", json={"refresh_token": tokens["access_token"]})
+    r = client.post("/api/auth/refresh", json={"refresh_token": tokens["access_token"]})
     assert r.status_code == 401
 
 
 def test_logout_returns_200(client):
-    r = client.post("/auth/logout")
+    r = client.post("/api/auth/logout")
     assert r.status_code == 200
 
 
 # --- Trees (Task 1.6) -------------------------------------------------
 
 def test_tree_crud_lifecycle(authed_client):
-    r = authed_client.post("/trees", json={"name": "Test Tree"})
+    r = authed_client.post("/api/trees", json={"name": "Test Tree"})
     assert r.status_code == 200
     tree = r.json()
     assert tree["name"] == "Test Tree"
-    assert tree["owner_id"] == authed_client.get("/me").json()["id"]
+    assert tree["owner_id"] == authed_client.get("/api/me").json()["id"]
     tree_id = tree["id"]
 
-    r = authed_client.get("/trees")
+    r = authed_client.get("/api/trees")
     assert r.status_code == 200
     assert any(t["id"] == tree_id for t in r.json())
 
-    r = authed_client.get(f"/trees/{tree_id}")
+    r = authed_client.get(f"/api/trees/{tree_id}")
     assert r.status_code == 200
     assert r.json()["id"] == tree_id
 
-    r = authed_client.patch(f"/trees/{tree_id}", json={"name": "Renamed Tree"})
+    r = authed_client.patch(f"/api/trees/{tree_id}", json={"name": "Renamed Tree"})
     assert r.status_code == 200
     assert r.json()["name"] == "Renamed Tree"
 
-    r = authed_client.delete(f"/trees/{tree_id}")
+    r = authed_client.delete(f"/api/trees/{tree_id}")
     assert r.status_code == 204
 
-    r = authed_client.get(f"/trees/{tree_id}")
+    r = authed_client.get(f"/api/trees/{tree_id}")
     assert r.status_code == 404
 
 
 def test_get_missing_tree_returns_404(authed_client):
-    r = authed_client.get("/trees/does-not-exist")
+    r = authed_client.get("/api/trees/does-not-exist")
     assert r.status_code == 404
 
 
 def test_patch_missing_tree_returns_404(authed_client):
-    r = authed_client.patch("/trees/does-not-exist", json={"name": "x"})
+    r = authed_client.patch("/api/trees/does-not-exist", json={"name": "x"})
     assert r.status_code == 404
 
 
 def test_delete_missing_tree_returns_404(authed_client):
-    r = authed_client.delete("/trees/does-not-exist")
+    r = authed_client.delete("/api/trees/does-not-exist")
     assert r.status_code == 404
 
 
@@ -189,82 +189,82 @@ def test_delete_missing_tree_returns_404(authed_client):
 
 @pytest.fixture
 def tree_ids(authed_client):
-    tree_a = authed_client.post("/trees", json={"name": "Tree A"}).json()["id"]
-    tree_b = authed_client.post("/trees", json={"name": "Tree B"}).json()["id"]
+    tree_a = authed_client.post("/api/trees", json={"name": "Tree A"}).json()["id"]
+    tree_b = authed_client.post("/api/trees", json={"name": "Tree B"}).json()["id"]
     yield tree_a, tree_b
-    authed_client.delete(f"/trees/{tree_a}")
-    authed_client.delete(f"/trees/{tree_b}")
+    authed_client.delete(f"/api/trees/{tree_a}")
+    authed_client.delete(f"/api/trees/{tree_b}")
 
 
 def test_person_crud_lifecycle(authed_client, tree_ids):
     tree_a, _ = tree_ids
 
-    r = authed_client.post(f"/trees/{tree_a}/people", json={"name": "Alice", "birth_year": 1990})
+    r = authed_client.post(f"/api/trees/{tree_a}/people", json={"name": "Alice", "birth_year": 1990})
     assert r.status_code == 200
     person = r.json()
     assert person["name"] == "Alice"
     assert person["tree_id"] == tree_a
     person_id = person["id"]
 
-    r = authed_client.get(f"/trees/{tree_a}/people")
+    r = authed_client.get(f"/api/trees/{tree_a}/people")
     assert r.status_code == 200
     assert any(p["id"] == person_id for p in r.json())
 
-    r = authed_client.get(f"/trees/{tree_a}/people", params={"search": "ali"})
+    r = authed_client.get(f"/api/trees/{tree_a}/people", params={"search": "ali"})
     assert r.status_code == 200
     assert any(p["id"] == person_id for p in r.json())
 
-    r = authed_client.get(f"/trees/{tree_a}/people", params={"search": "zzz-no-match"})
+    r = authed_client.get(f"/api/trees/{tree_a}/people", params={"search": "zzz-no-match"})
     assert r.status_code == 200
     assert r.json() == []
 
-    r = authed_client.get(f"/trees/{tree_a}/people/{person_id}")
+    r = authed_client.get(f"/api/trees/{tree_a}/people/{person_id}")
     assert r.status_code == 200
     assert r.json()["name"] == "Alice"
 
-    r = authed_client.patch(f"/trees/{tree_a}/people/{person_id}", json={"birth_place": "Boston"})
+    r = authed_client.patch(f"/api/trees/{tree_a}/people/{person_id}", json={"birth_place": "Boston"})
     assert r.status_code == 200
     assert r.json()["birth_place"] == "Boston"
     assert r.json()["name"] == "Alice"  # unrelated fields untouched
 
-    r = authed_client.delete(f"/trees/{tree_a}/people/{person_id}")
+    r = authed_client.delete(f"/api/trees/{tree_a}/people/{person_id}")
     assert r.status_code == 204
 
-    r = authed_client.get(f"/trees/{tree_a}/people/{person_id}")
+    r = authed_client.get(f"/api/trees/{tree_a}/people/{person_id}")
     assert r.status_code == 404
 
 
 def test_cross_tree_isolation(authed_client, tree_ids):
     tree_a, tree_b = tree_ids
-    person_id = authed_client.post(f"/trees/{tree_a}/people", json={"name": "Bob"}).json()["id"]
+    person_id = authed_client.post(f"/api/trees/{tree_a}/people", json={"name": "Bob"}).json()["id"]
 
     # Bob belongs to tree_a — fetching/editing/deleting him through tree_b
     # must behave as if he doesn't exist there.
-    r = authed_client.get(f"/trees/{tree_b}/people/{person_id}")
+    r = authed_client.get(f"/api/trees/{tree_b}/people/{person_id}")
     assert r.status_code == 404
 
-    r = authed_client.patch(f"/trees/{tree_b}/people/{person_id}", json={"name": "Hacked"})
+    r = authed_client.patch(f"/api/trees/{tree_b}/people/{person_id}", json={"name": "Hacked"})
     assert r.status_code == 404
 
-    r = authed_client.delete(f"/trees/{tree_b}/people/{person_id}")
+    r = authed_client.delete(f"/api/trees/{tree_b}/people/{person_id}")
     assert r.status_code == 404
 
     # he's untouched and still fetchable through the correct tree
-    r = authed_client.get(f"/trees/{tree_a}/people/{person_id}")
+    r = authed_client.get(f"/api/trees/{tree_a}/people/{person_id}")
     assert r.status_code == 200
     assert r.json()["name"] == "Bob"
 
 
 def test_get_missing_person_returns_404(authed_client, tree_ids):
     tree_a, _ = tree_ids
-    r = authed_client.get(f"/trees/{tree_a}/people/does-not-exist")
+    r = authed_client.get(f"/api/trees/{tree_a}/people/does-not-exist")
     assert r.status_code == 404
 
 
 # --- Relationships (Task 1.8) ------------------------------------------
 
 def _add_person(authed_client, tree_id, name):
-    return authed_client.post(f"/trees/{tree_id}/people", json={"name": name}).json()["id"]
+    return authed_client.post(f"/api/trees/{tree_id}/people", json={"name": name}).json()["id"]
 
 
 def test_parent_of_create_is_idempotent(authed_client, tree_ids):
@@ -275,14 +275,14 @@ def test_parent_of_create_is_idempotent(authed_client, tree_ids):
     child_id = _add_person(authed_client, tree_a, "Child")
 
     r1 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": parent_id, "person_b_id": child_id, "type": "PARENT_OF"},
     )
     assert r1.status_code == 200
     rel_id_1 = r1.json()["relationship_id"]
 
     r2 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": parent_id, "person_b_id": child_id, "type": "PARENT_OF"},
     )
     assert r2.status_code == 200
@@ -299,7 +299,7 @@ def test_married_to_detects_existing_regardless_of_direction(authed_client, tree
     bob_id = _add_person(authed_client, tree_a, "Bob")
 
     r1 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": alice_id, "person_b_id": bob_id, "type": "MARRIED_TO"},
     )
     assert r1.status_code == 200
@@ -307,7 +307,7 @@ def test_married_to_detects_existing_regardless_of_direction(authed_client, tree
 
     # reversed order on purpose
     r2 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": bob_id, "person_b_id": alice_id, "type": "MARRIED_TO"},
     )
     assert r2.status_code == 200
@@ -325,11 +325,11 @@ def test_married_to_allows_polygamy(authed_client, tree_ids):
     partner_2 = _add_person(authed_client, tree_a, "Partner Two")
 
     r1 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": person_id, "person_b_id": partner_1, "type": "MARRIED_TO"},
     )
     r2 = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": person_id, "person_b_id": partner_2, "type": "MARRIED_TO"},
     )
     assert r1.status_code == 200
@@ -341,7 +341,7 @@ def test_self_relationship_rejected(authed_client, tree_ids):
     tree_a, _ = tree_ids
     person_id = _add_person(authed_client, tree_a, "Solo")
     r = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": person_id, "person_b_id": person_id, "type": "PARENT_OF"},
     )
     assert r.status_code == 400
@@ -353,7 +353,7 @@ def test_relationship_rejects_person_from_other_tree(authed_client, tree_ids):
     person_b = _add_person(authed_client, tree_b, "InTreeB")
 
     r = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": person_a, "person_b_id": person_b, "type": "PARENT_OF"},
     )
     assert r.status_code == 404
@@ -364,7 +364,7 @@ def test_invalid_relationship_type_rejected(authed_client, tree_ids):
     a = _add_person(authed_client, tree_a, "A")
     b = _add_person(authed_client, tree_a, "B")
     r = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": a, "person_b_id": b, "type": "NONSENSE"},
     )
     assert r.status_code == 422  # FastAPI/Pydantic rejects it before our code runs
@@ -375,15 +375,15 @@ def test_delete_relationship(authed_client, tree_ids):
     a = _add_person(authed_client, tree_a, "A")
     b = _add_person(authed_client, tree_a, "B")
     rel_id = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
     ).json()["relationship_id"]
 
-    r = authed_client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    r = authed_client.delete(f"/api/trees/{tree_a}/relationships/{rel_id}")
     assert r.status_code == 204
 
     # deleting again — it's gone now, so 404
-    r = authed_client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    r = authed_client.delete(f"/api/trees/{tree_a}/relationships/{rel_id}")
     assert r.status_code == 404
 
 
@@ -392,16 +392,16 @@ def test_delete_relationship_cross_tree_rejected(authed_client, tree_ids):
     a = _add_person(authed_client, tree_a, "A")
     b = _add_person(authed_client, tree_a, "B")
     rel_id = authed_client.post(
-        f"/trees/{tree_a}/relationships",
+        f"/api/trees/{tree_a}/relationships",
         json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
     ).json()["relationship_id"]
 
     # the relationship is in tree_a — deleting it through tree_b must fail
-    r = authed_client.delete(f"/trees/{tree_b}/relationships/{rel_id}")
+    r = authed_client.delete(f"/api/trees/{tree_b}/relationships/{rel_id}")
     assert r.status_code == 404
 
     # and it must still exist afterward, deletable through the real tree
-    r = authed_client.delete(f"/trees/{tree_a}/relationships/{rel_id}")
+    r = authed_client.delete(f"/api/trees/{tree_a}/relationships/{rel_id}")
     assert r.status_code == 204
 
 
@@ -409,53 +409,53 @@ def test_delete_relationship_cross_tree_rejected(authed_client, tree_ids):
 
 def test_tree_routes_require_login(client):
     """No token -> 401 on every tree-scoped route, whether or not the tree exists."""
-    assert client.get("/trees").status_code == 401
-    assert client.post("/trees", json={"name": "x"}).status_code == 401
-    assert client.get("/trees/anything").status_code == 401
-    assert client.get("/trees/anything/people").status_code == 401
-    assert client.post("/trees/anything/people", json={"name": "x"}).status_code == 401
-    assert client.get("/trees/anything/graph").status_code == 401
+    assert client.get("/api/trees").status_code == 401
+    assert client.post("/api/trees", json={"name": "x"}).status_code == 401
+    assert client.get("/api/trees/anything").status_code == 401
+    assert client.get("/api/trees/anything/people").status_code == 401
+    assert client.post("/api/trees/anything/people", json={"name": "x"}).status_code == 401
+    assert client.get("/api/trees/anything/graph").status_code == 401
     assert client.post(
-        "/trees/anything/relationships",
+        "/api/trees/anything/relationships",
         json={"person_a_id": "a", "person_b_id": "b", "type": "PARENT_OF"},
     ).status_code == 401
 
 
 def test_create_tree_saves_logged_in_user_as_owner(authed_client):
-    me = authed_client.get("/me").json()
-    tree = authed_client.post("/trees", json={"name": "Mine"}).json()
+    me = authed_client.get("/api/me").json()
+    tree = authed_client.post("/api/trees", json={"name": "Mine"}).json()
     try:
         assert tree["owner_id"] == me["id"]
     finally:
-        authed_client.delete(f"/trees/{tree['id']}")
+        authed_client.delete(f"/api/trees/{tree['id']}")
 
 
 def test_list_trees_returns_only_own_trees(make_authed_client):
     user_a = make_authed_client()
     user_b = make_authed_client()
-    tree_a = user_a.post("/trees", json={"name": "A's tree"}).json()["id"]
+    tree_a = user_a.post("/api/trees", json={"name": "A's tree"}).json()["id"]
     try:
-        assert any(t["id"] == tree_a for t in user_a.get("/trees").json())
-        assert not any(t["id"] == tree_a for t in user_b.get("/trees").json())
+        assert any(t["id"] == tree_a for t in user_a.get("/api/trees").json())
+        assert not any(t["id"] == tree_a for t in user_b.get("/api/trees").json())
     finally:
-        user_a.delete(f"/trees/{tree_a}")
+        user_a.delete(f"/api/trees/{tree_a}")
 
 
 def test_other_users_tree_returns_403(make_authed_client):
     user_a = make_authed_client()
     user_b = make_authed_client()
-    tree_a = user_a.post("/trees", json={"name": "A's tree"}).json()["id"]
+    tree_a = user_a.post("/api/trees", json={"name": "A's tree"}).json()["id"]
     try:
-        assert user_b.get(f"/trees/{tree_a}").status_code == 403
-        assert user_b.patch(f"/trees/{tree_a}", json={"name": "Hijacked"}).status_code == 403
-        assert user_b.delete(f"/trees/{tree_a}").status_code == 403
+        assert user_b.get(f"/api/trees/{tree_a}").status_code == 403
+        assert user_b.patch(f"/api/trees/{tree_a}", json={"name": "Hijacked"}).status_code == 403
+        assert user_b.delete(f"/api/trees/{tree_a}").status_code == 403
 
         # untouched by B's attempts
-        still_there = user_a.get(f"/trees/{tree_a}")
+        still_there = user_a.get(f"/api/trees/{tree_a}")
         assert still_there.status_code == 200
         assert still_there.json()["name"] == "A's tree"
     finally:
-        user_a.delete(f"/trees/{tree_a}")
+        user_a.delete(f"/api/trees/{tree_a}")
 
 
 def test_other_users_tree_contents_return_403(make_authed_client):
@@ -463,21 +463,21 @@ def test_other_users_tree_contents_return_403(make_authed_client):
     too — not just the tree record itself."""
     user_a = make_authed_client()
     user_b = make_authed_client()
-    tree_a = user_a.post("/trees", json={"name": "A's tree"}).json()["id"]
-    person_id = user_a.post(f"/trees/{tree_a}/people", json={"name": "Private"}).json()["id"]
+    tree_a = user_a.post("/api/trees", json={"name": "A's tree"}).json()["id"]
+    person_id = user_a.post(f"/api/trees/{tree_a}/people", json={"name": "Private"}).json()["id"]
     try:
-        assert user_b.get(f"/trees/{tree_a}/people").status_code == 403
-        assert user_b.get(f"/trees/{tree_a}/people/{person_id}").status_code == 403
-        assert user_b.post(f"/trees/{tree_a}/people", json={"name": "Intruder"}).status_code == 403
-        assert user_b.get(f"/trees/{tree_a}/graph").status_code == 403
+        assert user_b.get(f"/api/trees/{tree_a}/people").status_code == 403
+        assert user_b.get(f"/api/trees/{tree_a}/people/{person_id}").status_code == 403
+        assert user_b.post(f"/api/trees/{tree_a}/people", json={"name": "Intruder"}).status_code == 403
+        assert user_b.get(f"/api/trees/{tree_a}/graph").status_code == 403
         assert user_b.post(
-            f"/trees/{tree_a}/relationships",
+            f"/api/trees/{tree_a}/relationships",
             json={"person_a_id": person_id, "person_b_id": person_id, "type": "PARENT_OF"},
         ).status_code == 403
     finally:
-        user_a.delete(f"/trees/{tree_a}")
+        user_a.delete(f"/api/trees/{tree_a}")
 
 
 def test_missing_tree_returns_404_for_logged_in_user(authed_client):
-    assert authed_client.get("/trees/does-not-exist").status_code == 404
-    assert authed_client.get("/trees/does-not-exist/people").status_code == 404
+    assert authed_client.get("/api/trees/does-not-exist").status_code == 404
+    assert authed_client.get("/api/trees/does-not-exist/people").status_code == 404

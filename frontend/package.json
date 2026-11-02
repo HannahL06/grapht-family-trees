@@ -11,10 +11,11 @@
   },
   "dependencies": {
     "axios": "^1.21.0",
-    "cytoscape": "^3.34.4",
+    "graphology": "^0.26.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.5"
+    "react-router-dom": "^7.18.5",
+    "sigma": "^4.0.4"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

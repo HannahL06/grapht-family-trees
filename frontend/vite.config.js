@@ -6,13 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // The browser calls /api/..., Vite forwards it to the FastAPI backend.
-      // The backend's routes have no /api prefix (/trees, /auth/login, /me),
-      // so it must be stripped or every call would 404.
+      // The browser calls /api/..., Vite forwards it to the FastAPI backend
+      // unchanged: the backend serves all its routes under /api too, so no
+      // path rewriting is needed here or in production.
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },

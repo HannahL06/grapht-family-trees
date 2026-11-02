@@ -52,7 +52,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 1.5 Pydantic models [x]
-**Agent brief:** Create Pydantic schemas directly in each feature file (no separate `schemas.py` — one file per feature holds its schemas, routes, and Cypher together). In `people.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
+**Agent brief:** Create Pydantic schemas directly in each feature file (no separate `schemas.py` — one file per feature holds its schemas, routes, and Cypher together). In `people.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/api/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
 
 **Done when:** `python -c "from app.people import PersonCreate; PersonCreate(name='Test')"` runs without error.
 
@@ -61,7 +61,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ### 1.6 Tree CRUD endpoints [x]
 **Agent brief:** Implement the trees feature in `backend/app/trees.py` — schemas, routes, and Cypher (via `core/db.py`) all in this one file. Implement these endpoints. Use a hardcoded `owner_id = "dev-user"` for now (auth comes later). Endpoints: `POST /trees` (create Tree node in Neo4j, return TreeResponse), `GET /trees` (return all trees where owner_id matches), `GET /trees/{tree_id}` (return one tree or 404), `PATCH /trees/{tree_id}` (update name), `DELETE /trees/{tree_id}` (detach delete tree and all its Person nodes). Register the router in `main.py`.
 
-**Done when:** All five endpoints work correctly via the FastAPI docs UI (`/docs`). Create a tree, fetch it, rename it, delete it.
+**Done when:** All five endpoints work correctly via the FastAPI docs UI (`/api/docs`). Create a tree, fetch it, rename it, delete it.
 
 ---
 
@@ -70,7 +70,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 **Tree isolation (see `design.md`):** every person lookup, update and delete must match on both `id` and `tree_id` (e.g. `MATCH (p:Person {id: $pid, tree_id: $tid})`), all parameterized; return 404 if no match. Create an index on `Person.id` and `Person.tree_id`. Every Cypher-touching function in `people.py` takes `tree_id`.
 
-**Done when:** All five endpoints work via `/docs`. Add 3 people to a tree, search for one by name, edit one, delete one. Requesting a person via a different tree's ID in the URL returns 404.
+**Done when:** All five endpoints work via `/api/docs`. Add 3 people to a tree, search for one by name, edit one, delete one. Requesting a person via a different tree's ID in the URL returns 404.
 
 ---
 
@@ -113,7 +113,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ## Phase 2 — Preliminary UI (~10 hrs, ~weeks 7–9)
 
 ### 2.1 React + Vite project setup [x]
-**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `cytoscape`. Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **with the `/api` prefix stripped** (Vite proxy option `rewrite: (path) => path.replace(/^\/api/, '')`). The backend's routes are `/trees`, `/auth/...` and `/me` with no `/api` prefix, so without the rewrite every call would 404. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
+**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `sigma`, `graphology` (Sigma.js renders the graph, graphology holds its data; Cytoscape was originally planned here and replaced — see `design.md`). Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **unchanged, with no path rewriting**. The backend serves every data route (and its docs) under `/api` itself (`/api/trees`, `/api/auth/...`, `/api/me`), so the browser and backend see identical paths in development and production. The prefix also keeps API calls separate from React page URLs like `/trees`. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
 
 **Done when:** `npm run dev` starts the dev server, browser shows "Grapht", no console errors.
 
@@ -123,6 +123,24 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 **Agent brief:** Create `frontend/src/api/client.js`: an Axios instance with `baseURL: '/api'`. Add a request interceptor that reads the JWT access token from `localStorage` (key: `"access_token"`) and attaches it as `Authorization: Bearer <token>` if present. Add a response interceptor for expired sessions: on a 401 response, clear the stored tokens and redirect to `/login` — **except** for requests to `/auth/login` and `/auth/register`, where a 401/400 is an expected "wrong password / email taken" error that the page must display, not a redirect trigger. (Access tokens expire after 1 hour; silently using the refresh token is deferred to a later task.) Create `frontend/src/api/auth.js` with three functions: `register(name, email, password)` (registration requires `name`), `login(email, password)` (stores both returned `access_token` and `refresh_token` in localStorage), `logout()` (clears localStorage tokens). `register` does NOT return tokens, so it does not log the user in by itself.
 
 **Done when:** Can call `login()` from the browser console, token appears in localStorage, and a subsequent API call includes the header. A request made with an expired or invalid token clears the tokens and lands on `/login`.
+
+---
+
+### 2.x Visual design foundation (do this before 2.3) [ ]
+**Goal:** Decide how the app looks before building more pages, so Tasks 2.3 onward are built once on the real design instead of being built unstyled and restyled in Phase 4. Done interactively with the user (who has a specific vision), not by an agent working alone.
+
+**Steps:**
+1. The user describes the vision: mood, reference sites/apps, colors, light vs. dark, sketches or screenshots (images saved in the repo, with the path given to Claude).
+2. Claude asks follow-up questions to pin down anything still open.
+3. Claude builds quick mockups of the key screens (login/register, tree list, tree view with the graph and a side panel) and shows them in the browser pane. Iterate until the user approves.
+4. Decide the styling approach (e.g. Tailwind + shadcn/ui, or hand-written CSS with design variables) and set it up in `frontend/`.
+5. Define the design tokens (colors, fonts, spacing, corner radii) and how the graph looks: node style, edge styles (`PARENT_OF` vs `MARRIED_TO`), selected/collapsed states. These become the Sigma.js styling (node colors/sizes, edge programs such as a dashed one for `MARRIED_TO`) reused in Task 2.7.
+6. Write the result into `design.md` as a "Visual Design" section.
+7. Trim Task 4.6 to match (it should only apply the foundation to later components, not choose a look).
+
+**Estimate:** ~2–4 hrs, depending on how detailed the vision is.
+
+**Done when:** The user has approved the mockups; the styling approach is installed and a shared base (global styles/tokens) exists in `frontend/`; the design spec is in `design.md`; Tasks 2.3 onward use it.
 
 ---
 
@@ -155,7 +173,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 2.7 Graph visualization (rough) [ ]
-**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in `backend/app/analysis.py`). [Backend piece built early, during Task 1.9's demo-page hookup — see schedule.md.] It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using the `cytoscape-fcose` layout (install `cytoscape-fcose`; it's a faster, better-scaling variant of `cose` — prefer it over plain `cose` from the start, since it also naturally spaces out distant/weakly-connected branches). Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
+**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in `backend/app/analysis.py`). [Backend piece built early, during Task 1.9's demo-page hookup — see schedule.md.] It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props, loads them into a `graphology` graph, and renders it with Sigma.js (WebGL, chosen so trees much larger than 2,500 people stay smooth). Sigma only renders — it has no layout built in — so install `graphology-layout-forceatlas2` and use it for the force-directed layout, running it in its web-worker variant (`graphology-layout-forceatlas2/worker`) so large graphs don't freeze the page. Mount Sigma on a `div` that fills the available space, and create/destroy it inside `useEffect` (Sigma owns its own canvas, so React must not re-render it). Draw `MARRIED_TO` edges dashed using Sigma's `layerDashed`/`createEdgeProgram`. Update incrementally when props change (add only new nodes/edges to the graphology graph rather than rebuilding). In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required beyond that. Also test it once with a synthetic graph of 10,000+ nodes to confirm the scale goal, not only the 22-person demo tree.
 
 **Done when:** Navigating to a tree renders the nodes and edges from seed data as a graph. The layout is messy but the nodes are there.
 
@@ -232,15 +250,15 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 
 ## Phase 4 — UI Updates (~10 hrs, ~weeks 14–16)
 
-### 4.1 Traditional tree layout (Cytoscape.js) [ ]
-**Agent brief:** Install `cytoscape-dagre` and `dagre` in the frontend. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (current fcose layout) or `"tree"` (dagre hierarchical layout). In TreeView, add a toggle button that switches between the two layouts. The dagre layout should have `rankDir: "TB"` (top-to-bottom) and treat `PARENT_OF` edges as defining the hierarchy direction.
+### 4.1 Traditional tree layout (Sigma.js) [ ]
+**Agent brief:** Sigma has no built-in hierarchical layout, so compute the positions yourself: install `dagre` in the frontend, run it on the `PARENT_OF` structure (`rankdir: "TB"`, top-to-bottom, parents above children) and write the resulting `x`/`y` onto the graphology nodes. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (the ForceAtlas2 layout from Task 2.7) or `"tree"` (the dagre positions). In TreeView, add a toggle button that switches between the two. For very large trees dagre can be slow; if it is, evaluate `elkjs` or compute the layout on the backend, and note the result in `design.md`.
 
 **Done when:** Toggle button switches between force-directed and top-down hierarchical layouts for seed data.
 
 ---
 
 ### 4.2 Person detail side panel [ ]
-**Agent brief:** Create `frontend/src/components/PersonPanel.jsx`. It displays a selected person's details (name, birth year, death year, birth place, notes). It also includes an edit mode: clicking "Edit" renders the PersonForm pre-populated with that person's data; submitting calls `PATCH /trees/{tree_id}/people/{person_id}`. In TreeView, wire up Cytoscape's `tap` event on nodes to set a `selectedPersonId` state value. Render `<PersonPanel>` in a sidebar when a person is selected. Create `frontend/src/api/people.js` functions: `getPerson(treeId, personId)` and `updatePerson(treeId, personId, data)`.
+**Agent brief:** Create `frontend/src/components/PersonPanel.jsx`. It displays a selected person's details (name, birth year, death year, birth place, notes). It also includes an edit mode: clicking "Edit" renders the PersonForm pre-populated with that person's data; submitting calls `PATCH /trees/{tree_id}/people/{person_id}`. In TreeView, wire up Sigma's `clickNode` event to set a `selectedPersonId` state value. Render `<PersonPanel>` in a sidebar when a person is selected. Create `frontend/src/api/people.js` functions: `getPerson(treeId, personId)` and `updatePerson(treeId, personId, data)`.
 
 **Done when:** Clicking a node opens the panel with that person's data. Editing a field and saving updates the node.
 
@@ -254,7 +272,7 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 ---
 
 ### 4.4 Branch collapse/expand [ ]
-**Agent brief:** In `TreeGraph.jsx`, implement branch collapse and expand. When a node is right-clicked (or a collapse button is clicked on the node), hide all descendant nodes and edges in the tree below it (in tree layout: hide children and their subtrees). Show a visual indicator on the collapsed node. Right-clicking again (or an expand button) restores them. This should work in both layout modes. Use Cytoscape's `hide()`/`show()` methods on elements.
+**Agent brief:** In `TreeGraph.jsx`, implement branch collapse and expand. When a node is right-clicked (or a collapse button is clicked on the node), hide all descendant nodes and edges in the tree below it (in tree layout: hide children and their subtrees). Show a visual indicator on the collapsed node. Right-clicking again (or an expand button) restores them. This should work in both layout modes. With Sigma, set the `hidden` attribute on the graphology nodes/edges (or use node/edge reducers) rather than removing them, so expanding restores them without refetching.
 
 **Done when:** Collapsing a node hides its subtree. Expanding restores it. Works for a branch in the seed data.
 
@@ -268,6 +286,8 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 ---
 
 ### 4.6 Component library + basic polish [ ]
+**Note:** The look, styling approach and component library are now decided in Task 2.x (Visual design foundation). This task only applies that foundation to the components built in Phases 3–4 (relationship-path UI, sharing UI, side panel) and does the final consistency pass. Do not re-choose a library here.
+
 **Agent brief:** Install `shadcn/ui` (or `@radix-ui/react-*` with Tailwind CSS). Replace the plain HTML form inputs and buttons in LoginPage, RegisterPage, TreesPage, PersonForm, RelationshipForm, and RelationshipQuery with shadcn/ui equivalents (Input, Button, Select, Label, Card). Add a simple top navigation bar showing the current user's email and a logout button. No major layout redesign required — just make it look consistent and not raw HTML.
 
 **Done when:** App looks visually coherent. All forms use the component library. No raw `<input>` or `<button>` elements remain in pages/components.
@@ -314,7 +334,7 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 ### 5.6 Large seed script + demo data [ ]
 **Agent brief:** Expand `backend/seed/seed.py` to generate ~2,500 Person nodes across ~20 generations with realistic pedigree collapse patterns. Strategy: generate a base population of ~100 "founder" couples at the top, then each generation has children who sometimes marry cousins from the same generation (introduce cousin marriages at a rate that produces 10–20 meaningful multi-path relationship cases). Name people with generated names (can use a simple list). Run the script against the production AuraDB. Test the relationship-path endpoint against at least 3 known cousin-marriage pairs in the generated data and verify multi-path results.
 
-**Also check layout behavior at scale:** render this data in both the fcose and dagre layouts (Tasks 2.7, 4.1) and confirm that distant/weakly-connected branches visually separate and that denser branches get proportionally more space, without custom layout code. If `fcose` is too slow or cluttered at ~2,500 nodes, that's the signal to lean on branch collapse/expand (Task 4.4) and the zoom-clustering backlog item rather than writing a custom layout.
+**Also check layout behavior at scale:** render this data in both the ForceAtlas2 and dagre layouts (Tasks 2.7, 4.1) and confirm that distant/weakly-connected branches visually separate and that denser branches get proportionally more space, without custom layout code. Test at ~2,500 nodes (the minimum target) and also at 10,000+, since larger trees are an explicit goal. If either layout is too slow or cluttered at that size, that's the signal to lean on branch collapse/expand (Task 4.4), loading only part of the tree at a time (the `/graph` endpoint's root-person/depth options), and the zoom-clustering backlog item rather than writing a custom layout.
 
 **Done when:** AuraDB has ~2,500 nodes. At least 3 relationship-path queries return multiple paths with correct labels.
 

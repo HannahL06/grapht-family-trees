@@ -31,11 +31,11 @@ def make_authed_client():
         c = ctx.__enter__()
         email = f"authed-{uuid.uuid4()}@example.com"
         c.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"name": "Authed Test", "email": email, "password": TEST_PASSWORD},
         )
         token = c.post(
-            "/auth/login", json={"email": email, "password": TEST_PASSWORD}
+            "/api/auth/login", json={"email": email, "password": TEST_PASSWORD}
         ).json()["access_token"]
         c.headers.update({"Authorization": f"Bearer {token}"})
         contexts.append(ctx)

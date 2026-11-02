@@ -19,9 +19,9 @@
 
 ## Frontend
 - **React** (with **Vite** as build tool)
-- **Cytoscape.js** for graph/tree visualization
-  - Force-directed layout for graph view
-  - Dagre/hierarchical layout for traditional tree view
+- **Sigma.js** (WebGL renderer) + **graphology** (graph data structure) for graph/tree visualization — chosen over Cytoscape.js so trees well beyond 2,500 people stay smooth. Sigma only renders; layouts are separate packages:
+  - Force-directed layout for graph view: `graphology-layout-forceatlas2` (in a web worker)
+  - Hierarchical layout for traditional tree view: `dagre` computes positions, written onto the nodes
 - **React Router** for client-side routing
 - **Axios** for API calls
 - **shadcn/ui** (or similar) for component library — minimize custom design work

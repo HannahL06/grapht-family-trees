@@ -38,7 +38,7 @@ grapht/
 │   │   │   ├── people.js             # people CRUD API calls
 │   │   │   └── analysis.js           # graph fetch, relationship-path API calls
 │   │   ├── components/
-│   │   │   ├── TreeGraph.jsx         # Cytoscape.js wrapper component
+│   │   │   ├── TreeGraph.jsx         # Sigma.js + graphology wrapper component
 │   │   │   ├── PersonForm.jsx        # Add/edit person form
 │   │   │   ├── RelationshipForm.jsx
 │   │   │   └── PersonPanel.jsx       # Side panel: person details + edit
