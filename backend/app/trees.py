@@ -21,6 +21,14 @@ class TreeResponse(BaseModel):
     id: str
     name: str
     owner_id: str
+    member_count: int = 0
+
+
+def _member_count(tree_id: str) -> int:
+    rows = run_query(
+        "MATCH (p:Person {tree_id: $tree_id}) RETURN count(p) AS c", {"tree_id": tree_id}
+    )
+    return rows[0]["c"]
 
 
 @router.post("/trees", response_model=TreeResponse)
@@ -37,14 +45,16 @@ def create_tree(body: TreeCreate, current_user: dict = Depends(get_current_user)
 def list_trees(current_user: dict = Depends(get_current_user)):
     return run_query(
         "MATCH (t:Tree {owner_id: $owner_id}) "
-        "RETURN t.id AS id, t.name AS name, t.owner_id AS owner_id",
+        "OPTIONAL MATCH (p:Person {tree_id: t.id}) "
+        "RETURN t.id AS id, t.name AS name, t.owner_id AS owner_id, "
+        "count(p) AS member_count",
         {"owner_id": current_user["id"]},
     )
 
 
 @router.get("/trees/{tree_id}", response_model=TreeResponse)
 def get_tree(tree: dict = Depends(require_tree_access)):
-    return tree
+    return {**tree, "member_count": _member_count(tree["id"])}
 
 
 @router.patch("/trees/{tree_id}", response_model=TreeResponse)
@@ -55,7 +65,7 @@ def update_tree(body: TreeUpdate, tree: dict = Depends(require_tree_access)):
             {"id": tree["id"], "name": body.name},
         )
         tree["name"] = body.name
-    return tree
+    return {**tree, "member_count": _member_count(tree["id"])}
 
 
 @router.delete("/trees/{tree_id}", status_code=204)

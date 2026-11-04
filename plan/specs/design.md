@@ -37,6 +37,7 @@ Neo4j has no fixed schema: labels, properties and relationship types exist by co
 ### MARRIED_TO (relationship)
 - `(Person)-[:MARRIED_TO {id}]->(Person)`
 - `id` (UUID, generated in Python at creation) — same reasoning as `PARENT_OF` above
+- `marriage_year` (optional integer): shown as "Married" in the UI. Set at creation, editable later with `PATCH /trees/{tree_id}/relationships/{relationship_id}` (the only editable field; to change who is married, delete and recreate). Existing edges have none (null). A person can have several marriages, so "Married" can show several years. `PARENT_OF` edges have no such property.
 - One edge per couple; direction is arbitrary and never semantically meaningful — always query with `-[:MARRIED_TO]-` (no arrow)
 - No count limit on number of partners (supports polygamous families) — the only rule is no duplicate edge for the *same* pair
 - Enforced in `relationships/repository.py` at creation: check both directions for an existing edge before creating (`MERGE` alone only checks one direction, so this needs an explicit check)
@@ -141,12 +142,15 @@ See `plan/original-spec.md` → "API Endpoint List" section.
 
 ### Routing
 ```
-/                → redirect to /login or /trees
-/login           → LoginPage
-/register        → RegisterPage
-/trees           → TreesPage (list + create)
-/trees/:id       → TreeView (main visualization + controls)
+/                          → LandingPage (public)
+/login                     → LoginPage
+/register                  → RegisterPage
+/trees                     → TreesPage (card grid + New tree)
+/trees/:id                 → TreeView (left pane + graph/tree canvas + details card)
+/trees/:id/members         → MembersPage (table of the current tree's people only)
+/trees/:id/members/:personId → MemberPage (details + family links)
 ```
+Everything under `/trees` requires login (`ProtectedRoute`). Members pages belong to one tree, so the top-bar "Members" link only appears while a tree is open. These are React page URLs; the data API lives under `/api`.
 
 ### State management
 No Redux/Zustand for MVP — React component state + prop passing is sufficient at this scale.
@@ -164,6 +168,71 @@ If it gets unwieldy in Phase 4, add Zustand (lightweight).
 - Trade-off accepted: more assembly than Cytoscape (renderer + layout packages + hand-built collapse/expand), in exchange for headroom at scale.
 - Rendering speed is only one limit on large trees. Fetching, laying out and drawing the whole tree at 10,000+ people will also need loading a part of the tree at a time (the `/graph` endpoint's planned root-person/depth options) and clustering when zoomed out.
 - The `/demo` page is separate throwaway code and still uses Cytoscape from a CDN; it is not part of this decision.
+
+---
+
+## Visual Design
+
+**Source:** the "Grapht Design System" canvas on claude.ai (https://claude.ai/artifact/Cfqd3pr4Tt38gA87VC1DTx), 7 artboards: tree view, Trees, Members, Member, Landing, Foundations, Components. It fixes the structure and feel; many more screens will follow in the same style.
+
+### Principles
+- Light, airy, friendly. White pages, a pale-blue graph canvas, one confident blue accent. Dark mode mirrors every token.
+- Flat and outlined: no shadows, nothing floats. 2px dividers and borders in the `rule` color. Pill-shaped buttons and toggles.
+- Controls are at least 44px tall (48px in the tree view's left pane). Icons are inline stroke SVG (2px stroke, round caps), never emoji.
+- Minimal motion: hover tints and instant open/close.
+
+### Tokens (semantic names; each has a light and a dark value)
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `page` | #FFFFFF | #0F1724 | pages, header, left pane |
+| `canvas` | #F2F8FC | #0B121E | graph panel, tree thumbnails |
+| `chrome` | #DCECF8 | #1C2940 | logo pill, toggles, soft buttons |
+| `hover` | #E8F3FB | #1A2638 | row and button hover |
+| `rule` | #D3E6F5 | #22314A | dividers, card borders |
+| `ink` | #0F2A43 | #E6ECF5 | text, selected-node ring |
+| `muted` | #4A627A | #9FB0C8 | labels, captions |
+| `accent` | #0F6CBD | #6EA8FE | actions, active nav |
+| `on-accent` | #FFFFFF | #0B1220 | text on accent |
+| `node-a` | #1E88E5 | #4D9CF0 | person, deep blue |
+| `node-b` | #7CC0F2 | #9BCBF7 | person, sky blue |
+| `edge` | #A9BCCD | #3A4961 | graph lines |
+| `card` | #FFFFFF | #142033 | member card, menus |
+| `off` | #8591A3 | #5D6B82 | disabled |
+
+### Type
+- **Fraunces 600:** logo (22px), page titles (36px), member name (56px).
+- **Cormorant Garamond 500:** landing headline only (up to 136px, tight tracking).
+- **DM Sans 400/500/700:** everything else. Body and controls 15–16px, nav 17px, field labels and captions 13px muted, member-page values 26px, small uppercase section headings 15px.
+
+### Shape and space
+Radii: 12 (rows), 16 (logo pill, graph panel), 20 (cards), 24 (tree cards), 48 (landing band), pill (999). Spacing in steps of 4 and 8px.
+
+### Screens and behavior
+- **App shell:** top bar with the "grapht" logo pill, nav tabs (Trees, Members; the active tab has a 3px accent underline), a light/dark toggle and a user button.
+- **Tree view:** left pane (220px) with a Graph/Tree pill toggle, search that expands inline with a results list, Add member, Edit and Delete (disabled until a person is selected, tooltip "Select a person first"), and a "Relationship calculator" link at the bottom. Click a person to select (ink ring). Two small round buttons appear beside them: "/" opens a details card (top right: Born, Birthplace, Married) and "+" opens an "Add to X: Parent, Spouse, Child" bar at the bottom. Clicking empty canvas clears the selection.
+- **Trees:** card grid with a decorative graph thumbnail, the tree name and "N members", plus a dashed "New tree" card.
+- **Members:** search field and a table (Name, Born, Birthplace, Married); each row opens the member.
+- **Member:** large name, tree name, "Show in tree" link, edit pencil; a Details column (Born, Birthplace, Married) and a Family column (Parents, Spouse, Children as links).
+- **Landing:** header (logo, How it works, Contact, Get started), a very large "See your whole family." headline and a band with a graph illustration. **Decision: it uses the same tokens as the app, with no separate palette.** `page` background, `ink` text, an `accent` "Get started" button, and the graph band uses `chrome` with `node-a`/`node-b` nodes and `edge` lines. Only the headline typeface (Cormorant Garamond) is specific to this page. The Landing artboard's own navy palette (#1F3A5A and friends) is superseded.
+
+### Graph styling
+- Nodes alternate `node-a` and `node-b` purely for visual variety; the colors carry no meaning. Assign by a hash of the person's id so a person keeps the same color between loads.
+- Selected node: ink ring (2.5px) and slightly larger. Edges use `edge`, 1.4px; `MARRIED_TO` is dashed, `PARENT_OF` solid. The graph view shows no labels; the Tree view shows the name under each node.
+- The "/" and "+" buttons are ordinary HTML elements positioned over the canvas next to the selected node (using Sigma's graph-to-screen coordinate conversion), not canvas drawing.
+- Sigma draws on a canvas, so it cannot use CSS classes. Read the token values from the CSS variables (`getComputedStyle(document.documentElement)`) on mount and whenever the theme changes, so the graph follows the same single source.
+
+### Styling approach: Tailwind CSS v4 with semantic tokens and a component layer
+Chosen over plain CSS because many more screens are coming and the goal is the least verbose, most maintainable styling that repeats cleanly across pages. (shadcn/ui was dropped: it ships its own look.)
+1. **Tokens live once**, in `frontend/src/index.css`: raw values as CSS variables on `:root` (light) and `[data-theme="dark"]`, exposed to Tailwind as semantic utilities (`bg-page`, `text-ink`, `border-rule`, `text-accent`) through `@theme inline`. Components never write `dark:` variants: switching `data-theme` recolors everything, which keeps class lists short. To rebrand or fix a color, change one line.
+2. **Fonts, radii and sizes are theme entries too** (`font-display`, `font-hero`, `rounded-card`), so markup reads `font-display text-4xl`, not raw values. Fonts are self-hosted (fontsource), not loaded from a CDN.
+3. **Component layer:** pages compose, components style. The long class strings live only in `frontend/src/components/ui/` (Button, PillToggle, Card, TextField, NavTab, AppShell/AppHeader, icons, table rows). A page should read like `<Page><h1>…</h1><CardGrid>…</CardGrid></Page>`.
+4. **Rules for every new screen:** reuse `ui/` components; need a new color or size, add a token and never hard-code a hex; if a class combination repeats three or more times, extract a component; check both themes.
+5. **Theme:** `data-theme` on `<html>`, toggle in the top bar, saved in `localStorage`, defaulting to the OS setting (`prefers-color-scheme`).
+6. A dev-only `/styleguide` page renders every `ui/` component in both themes (it mirrors the Components artboard) so new screens have a reference.
+
+### Open items
+- Login, register, empty states, modals (new tree, delete confirmation), the relationship-calculator results, collapse/expand controls and sharing screens are not mocked yet.
+- Decided: every screen uses the one token set above. The Member artboard's light divider (#E3E8EE) is a typo; use `rule` (#D3E6F5) there like everywhere else. The mock-up canvas itself still shows the old Landing and Member values; `design.md` is the source of truth.
 
 ---
 

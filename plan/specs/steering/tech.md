@@ -24,7 +24,7 @@
   - Hierarchical layout for traditional tree view: `dagre` computes positions, written onto the nodes
 - **React Router** for client-side routing
 - **Axios** for API calls
-- **shadcn/ui** (or similar) for component library — minimize custom design work
+- **Tailwind CSS v4** (via `@tailwindcss/vite`) for styling, with semantic design tokens as CSS variables (light and dark) and a small `components/ui/` component layer; see `design.md`, "Visual Design". Fonts (Fraunces, Cormorant Garamond, DM Sans) are self-hosted with fontsource. shadcn/ui is not used because it ships its own look.
 - JWT stored in localStorage; injected as Authorization header on all API calls
 
 ## Auth Approach

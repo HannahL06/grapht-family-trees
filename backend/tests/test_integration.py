@@ -405,6 +405,121 @@ def test_delete_relationship_cross_tree_rejected(authed_client, tree_ids):
     assert r.status_code == 204
 
 
+# --- Marriage year, relatives, member counts (Task 2.y) -----------------
+
+def _marry(authed_client, tree_id, a, b, **extra):
+    return authed_client.post(
+        f"/api/trees/{tree_id}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "MARRIED_TO", **extra},
+    )
+
+
+def test_marriage_year_create_and_patch(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    r = _marry(authed_client, tree_a, a, b, marriage_year=1973)
+    assert r.status_code == 200
+    assert r.json()["marriage_year"] == 1973
+    rel_id = r.json()["relationship_id"]
+
+    r = authed_client.patch(
+        f"/api/trees/{tree_a}/relationships/{rel_id}", json={"marriage_year": 1975}
+    )
+    assert r.status_code == 200
+    assert r.json()["marriage_year"] == 1975
+    assert r.json()["type"] == "MARRIED_TO"
+
+    r = authed_client.patch(f"/api/trees/{tree_a}/relationships/{rel_id}", json={"marriage_year": None})
+    assert r.json()["marriage_year"] is None
+
+
+def test_marriage_year_rejected_on_parent_of(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    r = authed_client.post(
+        f"/api/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF", "marriage_year": 1990},
+    )
+    assert r.status_code == 400
+
+    rel_id = authed_client.post(
+        f"/api/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
+    ).json()["relationship_id"]
+    r = authed_client.patch(f"/api/trees/{tree_a}/relationships/{rel_id}", json={"marriage_year": 1990})
+    assert r.status_code == 400
+
+
+def test_patch_relationship_cross_tree_404(authed_client, tree_ids):
+    tree_a, tree_b = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+    rel_id = _marry(authed_client, tree_a, a, b).json()["relationship_id"]
+
+    r = authed_client.patch(f"/api/trees/{tree_b}/relationships/{rel_id}", json={"marriage_year": 1900})
+    assert r.status_code == 404
+
+
+def test_relatives_with_two_marriages(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    me = _add_person(authed_client, tree_a, "Me")
+    dad = _add_person(authed_client, tree_a, "Dad")
+    kid = _add_person(authed_client, tree_a, "Kid")
+    wife1 = _add_person(authed_client, tree_a, "Wife1")
+    wife2 = _add_person(authed_client, tree_a, "Wife2")
+    for parent, child in [(dad, me), (me, kid)]:
+        authed_client.post(
+            f"/api/trees/{tree_a}/relationships",
+            json={"person_a_id": parent, "person_b_id": child, "type": "PARENT_OF"},
+        )
+    _marry(authed_client, tree_a, me, wife1, marriage_year=1970)
+    _marry(authed_client, tree_a, wife2, me, marriage_year=1985)  # opposite direction
+
+    r = authed_client.get(f"/api/trees/{tree_a}/people/{me}/relatives")
+    assert r.status_code == 200
+    body = r.json()
+    assert [p["name"] for p in body["parents"]] == ["Dad"]
+    assert [p["name"] for p in body["children"]] == ["Kid"]
+    assert {s["name"]: s["marriage_year"] for s in body["spouses"]} == {
+        "Wife1": 1970,
+        "Wife2": 1985,
+    }
+    assert all(s["relationship_id"] for s in body["spouses"])
+
+    # the people list shows both marriage years, sorted
+    people = authed_client.get(f"/api/trees/{tree_a}/people").json()
+    me_row = next(p for p in people if p["id"] == me)
+    assert me_row["marriage_years"] == [1970, 1985]
+    dad_row = next(p for p in people if p["id"] == dad)
+    assert dad_row["marriage_years"] == []
+
+
+def test_relatives_cross_tree_404(authed_client, tree_ids):
+    tree_a, tree_b = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    r = authed_client.get(f"/api/trees/{tree_b}/people/{a}/relatives")
+    assert r.status_code == 404
+
+
+def test_tree_member_count(authed_client):
+    tree = authed_client.post("/api/trees", json={"name": "Counted"}).json()
+    tid = tree["id"]
+    try:
+        assert tree["member_count"] == 0
+        _add_person(authed_client, tid, "One")
+        _add_person(authed_client, tid, "Two")
+
+        assert authed_client.get(f"/api/trees/{tid}").json()["member_count"] == 2
+        listed = next(t for t in authed_client.get("/api/trees").json() if t["id"] == tid)
+        assert listed["member_count"] == 2
+    finally:
+        authed_client.delete(f"/api/trees/{tid}")
+
+
 # --- Tree ownership & access (Task 1.11) --------------------------------
 
 def test_tree_routes_require_login(client):
