@@ -35,18 +35,26 @@ grapht/
 │   │   │   ├── client.js             # Axios instance with base URL + auth header
 │   │   │   ├── auth.js               # register, login, logout API calls
 │   │   │   ├── trees.js              # tree CRUD API calls
-│   │   │   ├── people.js             # people CRUD API calls
+│   │   │   ├── people.js             # people API calls (list, get, relatives, edit)
+│   │   │   ├── relationships.js      # create / edit / delete relationship API calls
 │   │   │   └── analysis.js           # graph fetch, relationship-path API calls
 │   │   ├── components/
-│   │   │   ├── TreeGraph.jsx         # Cytoscape.js wrapper component
-│   │   │   ├── PersonForm.jsx        # Add/edit person form
-│   │   │   ├── RelationshipForm.jsx
-│   │   │   └── PersonPanel.jsx       # Side panel: person details + edit
+│   │   │   ├── ui/                   # the only place with long Tailwind class lists:
+│   │   │   │                         #   Button, PillToggle, Card, TextField, NavTab,
+│   │   │   │                         #   AppHeader, AppShell, icons
+│   │   │   ├── TreeGraph.jsx         # Sigma.js + graphology wrapper component
+│   │   │   └── ...                   # feature components (member form, add-relative bar, details card)
 │   │   ├── pages/
+│   │   │   ├── LandingPage.jsx
 │   │   │   ├── LoginPage.jsx
 │   │   │   ├── RegisterPage.jsx
-│   │   │   ├── TreesPage.jsx         # List/create trees
-│   │   │   └── TreeView.jsx          # Main tree visualization + controls
+│   │   │   ├── TreesPage.jsx         # Card grid + New tree
+│   │   │   ├── TreeView.jsx          # Left pane + graph canvas + details card
+│   │   │   ├── MembersPage.jsx       # Table of the current tree's people
+│   │   │   ├── MemberPage.jsx        # One person: details + family links
+│   │   │   └── Styleguide.jsx        # Dev-only: every ui/ component in both themes
+│   │   ├── theme.js                  # data-theme toggle, saved choice, token reader for Sigma
+│   │   ├── index.css                 # Tailwind import + design tokens (light / dark)
 │   │   ├── App.jsx                   # Router setup
 │   │   └── main.jsx                  # Entry point
 │   ├── index.html

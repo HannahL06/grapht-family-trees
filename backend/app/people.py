@@ -64,26 +64,69 @@ def create_person_in_tree(tree_id: str, body: PersonCreate):
     return person
 
 
-@router.get("/trees/{tree_id}/people", response_model=list[PersonResponse])
+class PersonListItem(PersonResponse):
+    # Years of every marriage with a known year (a person can have several).
+    marriage_years: list[int] = []
+
+
+@router.get("/trees/{tree_id}/people", response_model=list[PersonListItem])
 def list_people_in_tree(tree_id: str, search: str | None = None):
-    if search:
-        return run_query(
-            "MATCH (p:Person {tree_id: $tree_id}) "
-            "WHERE toLower(p.name) CONTAINS toLower($search) "
-            "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, "
-            "p.birth_year AS birth_year, p.death_year AS death_year, "
-            "p.birth_place AS birth_place, p.notes AS notes "
-            "ORDER BY p.name",
-            {"tree_id": tree_id, "search": search},
-        )
-    return run_query(
+    # `$search IS NULL OR ...` keeps one query for both the plain list and
+    # the search; the search text is still a parameter, never concatenated.
+    rows = run_query(
         "MATCH (p:Person {tree_id: $tree_id}) "
+        "WHERE $search IS NULL OR toLower(p.name) CONTAINS toLower($search) "
+        "OPTIONAL MATCH (p)-[m:MARRIED_TO]-(:Person {tree_id: $tree_id}) "
+        "WITH p, [y IN collect(m.marriage_year) WHERE y IS NOT NULL] AS marriage_years "
         "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, "
         "p.birth_year AS birth_year, p.death_year AS death_year, "
-        "p.birth_place AS birth_place, p.notes AS notes "
+        "p.birth_place AS birth_place, p.notes AS notes, "
+        "marriage_years "
         "ORDER BY p.name",
-        {"tree_id": tree_id},
+        {"tree_id": tree_id, "search": search or None},
     )
+    for row in rows:
+        row["marriage_years"].sort()
+    return rows
+
+
+class RelativeRef(BaseModel):
+    id: str
+    name: str
+
+
+class SpouseRef(RelativeRef):
+    marriage_year: int | None = None
+    relationship_id: str
+
+
+class RelativesResponse(BaseModel):
+    parents: list[RelativeRef]
+    spouses: list[SpouseRef]
+    children: list[RelativeRef]
+
+
+@router.get("/trees/{tree_id}/people/{person_id}/relatives", response_model=RelativesResponse)
+def get_relatives(tree_id: str, person_id: str):
+    get_person_in_tree(tree_id, person_id)  # raises 404 if missing / other tree
+    params = {"person_id": person_id, "tree_id": tree_id}
+    parents = run_query(
+        "MATCH (x:Person {tree_id: $tree_id})-[:PARENT_OF]->(:Person {id: $person_id, tree_id: $tree_id}) "
+        "RETURN x.id AS id, x.name AS name ORDER BY x.name",
+        params,
+    )
+    children = run_query(
+        "MATCH (:Person {id: $person_id, tree_id: $tree_id})-[:PARENT_OF]->(x:Person {tree_id: $tree_id}) "
+        "RETURN x.id AS id, x.name AS name ORDER BY x.name",
+        params,
+    )
+    spouses = run_query(
+        "MATCH (:Person {id: $person_id, tree_id: $tree_id})-[r:MARRIED_TO]-(x:Person {tree_id: $tree_id}) "
+        "RETURN x.id AS id, x.name AS name, r.marriage_year AS marriage_year, "
+        "r.id AS relationship_id ORDER BY x.name",
+        params,
+    )
+    return {"parents": parents, "spouses": spouses, "children": children}
 
 
 @router.get("/trees/{tree_id}/people/{person_id}", response_model=PersonResponse)

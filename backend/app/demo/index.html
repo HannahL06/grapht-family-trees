@@ -120,7 +120,7 @@
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       if (!email || !password) return setStatus('Enter your email and password.', true);
-      const res = await fetch('/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -141,7 +141,7 @@
     }
 
     async function createRelationship(personAId, personBId, type) {
-      return api(`/trees/${TREE_ID}/relationships`, {
+      return api(`/api/trees/${TREE_ID}/relationships`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ person_a_id: personAId, person_b_id: personBId, type }),
@@ -149,7 +149,7 @@
     }
 
     async function refreshGraph() {
-      const res = await api(`/trees/${TREE_ID}/graph`);
+      const res = await api(`/api/trees/${TREE_ID}/graph`);
       const data = await res.json();
 
       const nodeEls = data.nodes.map(n => ({ data: { id: n.id, label: n.name } }));
@@ -196,7 +196,7 @@
     }
 
     async function refreshPeopleDropdowns() {
-      const res = await api(`/trees/${TREE_ID}/people`);
+      const res = await api(`/api/trees/${TREE_ID}/people`);
       const people = await res.json();
       const options = people.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
@@ -214,7 +214,7 @@
       const name = document.getElementById('person-name').value.trim();
       if (!name) return setStatus('Name is required.', true);
       const birth_year = document.getElementById('person-birth-year').value || null;
-      const res = await api(`/trees/${TREE_ID}/people`, {
+      const res = await api(`/api/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -233,7 +233,7 @@
       if (!person_id || !name) return setStatus('Pick a person and enter a spouse name.', true);
       const birth_year = document.getElementById('spouse-birth-year').value || null;
 
-      const createRes = await api(`/trees/${TREE_ID}/people`, {
+      const createRes = await api(`/api/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
@@ -258,7 +258,7 @@
       if (!parent_id || !name) return setStatus('Pick a parent and enter a child name.', true);
       const birth_year = document.getElementById('child-birth-year').value || null;
 
-      const createRes = await api(`/trees/${TREE_ID}/people`, {
+      const createRes = await api(`/api/trees/${TREE_ID}/people`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),

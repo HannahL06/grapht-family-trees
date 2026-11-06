@@ -21,6 +21,12 @@ class RelationshipCreate(BaseModel):
     person_a_id: str
     person_b_id: str
     type: RelationshipType
+    # Only meaningful for MARRIED_TO; rejected with a 400 on PARENT_OF.
+    marriage_year: int | None = None
+
+
+class RelationshipUpdate(BaseModel):
+    marriage_year: int | None = None
 
 
 class RelationshipResponse(BaseModel):
@@ -28,6 +34,7 @@ class RelationshipResponse(BaseModel):
     person_a_id: str
     person_b_id: str
     type: RelationshipType
+    marriage_year: int | None = None
 
 
 def _both_people_in_tree(tree_id: str, person_a_id: str, person_b_id: str) -> bool:
@@ -44,6 +51,11 @@ def create_relationship(tree_id: str, body: RelationshipCreate):
     if body.person_a_id == body.person_b_id:
         raise HTTPException(
             status_code=400, detail="A person cannot have a relationship with themself."
+        )
+
+    if body.marriage_year is not None and body.type != RelationshipType.MARRIED_TO:
+        raise HTTPException(
+            status_code=400, detail="marriage_year only applies to MARRIED_TO relationships."
         )
 
     if not _both_people_in_tree(tree_id, body.person_a_id, body.person_b_id):
@@ -67,6 +79,7 @@ def create_relationship(tree_id: str, body: RelationshipCreate):
             },
         )
         relationship_id = rows[0]["relationship_id"]
+        marriage_year = None
     else:
         # MARRIED_TO has no fixed direction, so MERGE on one direction alone
         # isn't enough — check both directions explicitly before creating.
@@ -74,22 +87,33 @@ def create_relationship(tree_id: str, body: RelationshipCreate):
             "MATCH (a:Person {id: $a_id, tree_id: $tree_id})"
             "-[r:MARRIED_TO]-"
             "(b:Person {id: $b_id, tree_id: $tree_id}) "
-            "RETURN r.id AS relationship_id LIMIT 1",
+            "RETURN r.id AS relationship_id, r.marriage_year AS marriage_year LIMIT 1",
             {"a_id": body.person_a_id, "b_id": body.person_b_id, "tree_id": tree_id},
         )
         if existing:
             relationship_id = existing[0]["relationship_id"]
+            marriage_year = existing[0]["marriage_year"]
+            if body.marriage_year is not None:
+                # Re-posting an existing marriage with a year fills in/updates it.
+                run_query(
+                    "MATCH (:Person {tree_id: $tree_id})-[r:MARRIED_TO {id: $rid}]-"
+                    "(:Person {tree_id: $tree_id}) SET r.marriage_year = $year",
+                    {"tree_id": tree_id, "rid": relationship_id, "year": body.marriage_year},
+                )
+                marriage_year = body.marriage_year
         else:
             relationship_id = str(uuid.uuid4())
+            marriage_year = body.marriage_year
             run_query(
                 "MATCH (a:Person {id: $a_id, tree_id: $tree_id}), "
                 "(b:Person {id: $b_id, tree_id: $tree_id}) "
-                "CREATE (a)-[r:MARRIED_TO {id: $new_id}]->(b)",
+                "CREATE (a)-[r:MARRIED_TO {id: $new_id, marriage_year: $year}]->(b)",
                 {
                     "a_id": body.person_a_id,
                     "b_id": body.person_b_id,
                     "tree_id": tree_id,
                     "new_id": relationship_id,
+                    "year": marriage_year,
                 },
             )
 
@@ -98,6 +122,39 @@ def create_relationship(tree_id: str, body: RelationshipCreate):
         "person_a_id": body.person_a_id,
         "person_b_id": body.person_b_id,
         "type": body.type,
+        "marriage_year": marriage_year,
+    }
+
+
+@router.patch(
+    "/trees/{tree_id}/relationships/{relationship_id}", response_model=RelationshipResponse
+)
+def update_relationship(tree_id: str, relationship_id: str, body: RelationshipUpdate):
+    # Same isolation as DELETE: both endpoints must be in this tree.
+    rows = run_query(
+        "MATCH (a:Person {tree_id: $tree_id})-[r {id: $rid}]->(b:Person {tree_id: $tree_id}) "
+        "RETURN a.id AS person_a_id, b.id AS person_b_id, type(r) AS type",
+        {"tree_id": tree_id, "rid": relationship_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Relationship not found")
+    rel = rows[0]
+    if rel["type"] != "MARRIED_TO":
+        raise HTTPException(
+            status_code=400, detail="Only MARRIED_TO relationships can be edited."
+        )
+
+    run_query(
+        "MATCH (:Person {tree_id: $tree_id})-[r:MARRIED_TO {id: $rid}]->(:Person {tree_id: $tree_id}) "
+        "SET r.marriage_year = $year",
+        {"tree_id": tree_id, "rid": relationship_id, "year": body.marriage_year},
+    )
+    return {
+        "relationship_id": relationship_id,
+        "person_a_id": rel["person_a_id"],
+        "person_b_id": rel["person_b_id"],
+        "type": rel["type"],
+        "marriage_year": body.marriage_year,
     }
 
 

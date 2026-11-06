@@ -3,6 +3,8 @@
 Each task is ~1–2 hours and written as a self-contained brief you can hand to a coding agent.
 Before handing a task to an agent, paste in the relevant steering files (`product.md`, `tech.md`, `structure.md`) as context.
 
+**Endpoint paths:** every backend route listed in these briefs (e.g. `GET /trees`, `POST /auth/login`, `GET /me`) is actually served under the `/api` prefix (`/api/trees`, `/api/auth/login`, `/api/me`), and the docs are at `/api/docs`. Briefs omit the prefix for brevity. Only `GET /` (health check) and `/demo` are unprefixed. In frontend code, the axios client's `baseURL: '/api'` adds the prefix, so calls are written without it.
+
 **Status key:** `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` skipped/cut
 
 ---
@@ -52,7 +54,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ---
 
 ### 1.5 Pydantic models [x]
-**Agent brief:** Create Pydantic schemas directly in each feature file (no separate `schemas.py` — one file per feature holds its schemas, routes, and Cypher together). In `people.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
+**Agent brief:** Create Pydantic schemas directly in each feature file (no separate `schemas.py` — one file per feature holds its schemas, routes, and Cypher together). In `people.py`: `PersonCreate` (fields: `name` required, `birth_year` optional int, `death_year` optional int, `birth_place` optional str, `notes` optional str), `PersonUpdate` (all fields optional), `PersonResponse` (all fields + `id` str + `tree_id` str). In `trees.py`: `TreeCreate` (name required), `TreeUpdate` (name optional), `TreeResponse` (id, name, owner_id). In `relationships.py`: define `RelationshipType(str, Enum)` with values `PARENT_OF` and `MARRIED_TO` (not a plain string) — FastAPI then rejects any other value at the API boundary and shows the two options as a dropdown in `/api/docs`. `RelationshipCreate` (person_a_id, person_b_id, `type: RelationshipType`), `RelationshipResponse` (relationship_id, person_a_id, person_b_id, `type: RelationshipType`). In `auth.py`: `UserCreate` (name, email, password), `UserResponse` (id, name, email).
 
 **Done when:** `python -c "from app.people import PersonCreate; PersonCreate(name='Test')"` runs without error.
 
@@ -61,7 +63,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 ### 1.6 Tree CRUD endpoints [x]
 **Agent brief:** Implement the trees feature in `backend/app/trees.py` — schemas, routes, and Cypher (via `core/db.py`) all in this one file. Implement these endpoints. Use a hardcoded `owner_id = "dev-user"` for now (auth comes later). Endpoints: `POST /trees` (create Tree node in Neo4j, return TreeResponse), `GET /trees` (return all trees where owner_id matches), `GET /trees/{tree_id}` (return one tree or 404), `PATCH /trees/{tree_id}` (update name), `DELETE /trees/{tree_id}` (detach delete tree and all its Person nodes). Register the router in `main.py`.
 
-**Done when:** All five endpoints work correctly via the FastAPI docs UI (`/docs`). Create a tree, fetch it, rename it, delete it.
+**Done when:** All five endpoints work correctly via the FastAPI docs UI (`/api/docs`). Create a tree, fetch it, rename it, delete it.
 
 ---
 
@@ -70,7 +72,7 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 **Tree isolation (see `design.md`):** every person lookup, update and delete must match on both `id` and `tree_id` (e.g. `MATCH (p:Person {id: $pid, tree_id: $tid})`), all parameterized; return 404 if no match. Create an index on `Person.id` and `Person.tree_id`. Every Cypher-touching function in `people.py` takes `tree_id`.
 
-**Done when:** All five endpoints work via `/docs`. Add 3 people to a tree, search for one by name, edit one, delete one. Requesting a person via a different tree's ID in the URL returns 404.
+**Done when:** All five endpoints work via `/api/docs`. Add 3 people to a tree, search for one by name, edit one, delete one. Requesting a person via a different tree's ID in the URL returns 404.
 
 ---
 
@@ -110,58 +112,107 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-## Phase 2 — Preliminary UI (~10 hrs, ~weeks 7–9)
+## Phase 2 — Preliminary UI (~24.5 hrs, ~weeks 7–14)
 
-### 2.1 React + Vite project setup [ ]
-**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `cytoscape`. Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **with the `/api` prefix stripped** (Vite proxy option `rewrite: (path) => path.replace(/^\/api/, '')`). The backend's routes are `/trees`, `/auth/...` and `/me` with no `/api` prefix, so without the rewrite every call would 404. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
+### 2.1 React + Vite project setup [x]
+**Agent brief:** In the project root, initialize a new Vite React project in a `frontend/` directory using the `react` template. Install these additional dependencies: `axios`, `react-router-dom`, `sigma`, `graphology` (Sigma.js renders the graph, graphology holds its data; Cytoscape was originally planned here and replaced — see `design.md`). Create this directory structure inside `frontend/src/`: `api/` (empty), `components/` (empty), `pages/` (empty). In `vite.config.js`, add a dev proxy: requests to `/api` are proxied to `http://localhost:8000` **unchanged, with no path rewriting**. The backend serves every data route (and its docs) under `/api` itself (`/api/trees`, `/api/auth/...`, `/api/me`), so the browser and backend see identical paths in development and production. The prefix also keeps API calls separate from React page URLs like `/trees`. Update `App.jsx` to render just a `<h1>Grapht</h1>` placeholder.
 
 **Done when:** `npm run dev` starts the dev server, browser shows "Grapht", no console errors.
 
 ---
 
-### 2.2 API client + auth API module [ ]
+### 2.2 API client + auth API module [x]
 **Agent brief:** Create `frontend/src/api/client.js`: an Axios instance with `baseURL: '/api'`. Add a request interceptor that reads the JWT access token from `localStorage` (key: `"access_token"`) and attaches it as `Authorization: Bearer <token>` if present. Add a response interceptor for expired sessions: on a 401 response, clear the stored tokens and redirect to `/login` — **except** for requests to `/auth/login` and `/auth/register`, where a 401/400 is an expected "wrong password / email taken" error that the page must display, not a redirect trigger. (Access tokens expire after 1 hour; silently using the refresh token is deferred to a later task.) Create `frontend/src/api/auth.js` with three functions: `register(name, email, password)` (registration requires `name`), `login(email, password)` (stores both returned `access_token` and `refresh_token` in localStorage), `logout()` (clears localStorage tokens). `register` does NOT return tokens, so it does not log the user in by itself.
 
 **Done when:** Can call `login()` from the browser console, token appears in localStorage, and a subsequent API call includes the header. A request made with an expired or invalid token clears the tokens and lands on `/login`.
 
 ---
 
+### 2.x Visual design foundation [x]
+**Goal:** Decide how the app looks before building more pages, so Tasks 2.3 onward are built once on the real design instead of being built unstyled and restyled in Phase 4.
+
+**Part A, the design (done).** The user made the mock-ups in the "Grapht Design System" canvas (https://claude.ai/artifact/Cfqd3pr4Tt38gA87VC1DTx): tree view, Trees, Members, Member and Landing screens, plus Foundations and Components sheets. The result, including tokens, type, screens and the styling approach (Tailwind CSS v4 + semantic tokens + a `ui/` component layer), is written into `design.md` under "Visual Design". Login, register, empty states, modals and other screens are not mocked yet; they get designed later in the same style.
+
+**Part B, the styling foundation (done 2026-11-04).** Built and verified in both themes at `/styleguide`; the toggle persists across reloads, lint (one fast-refresh warning in `icons.jsx`) and build pass. Not included yet: a `canvas` token, custom radius tokens (Tailwind's `rounded-xl`/`2xl`/`full` are used instead), the user button/menu in `AppHeader` (Task 2.3), and the search, minus and relationship icons (added with the screens that need them). Plan as written:
+1. Install `tailwindcss` and `@tailwindcss/vite`, add the plugin to `vite.config.js`, and `@import "tailwindcss"` in `src/index.css` (replacing the current minimal stylesheet).
+2. In `src/index.css`, define the tokens from `design.md` as CSS variables on `:root` (light) and `[data-theme="dark"]`, expose them to Tailwind with `@theme inline` as semantic utilities (`bg-page`, `bg-canvas`, `bg-chrome`, `text-ink`, `text-muted`, `text-accent`, `border-rule`, and so on), and add the fonts (`font-display` Fraunces, `font-hero` Cormorant Garamond, `font-sans` DM Sans) and radii (`rounded-card`, etc.). Install the fonts with fontsource packages (self-hosted, no CDN).
+3. Create `src/theme.js`: sets `data-theme` on `<html>`, saves the choice in `localStorage`, defaults to `prefers-color-scheme`, and exports a `useTheme()` hook. Also export a helper that reads the token values from the CSS variables, for Sigma (Task 2.7).
+4. Create the `src/components/ui/` set shown in the Components artboard: `Button` (variants: accent pill, soft pill, row action), `PillToggle`, `Card`, `TextField`/`SearchField`, `NavTab`, `AppHeader` (logo pill, nav tabs, theme toggle, user button) and `AppShell`, plus the inline SVG icons used (plus, search, pencil, trash, minus, sun, moon, relationship). Long class lists live only here.
+5. Create a dev-only `/styleguide` route that renders every `ui/` component in both themes, matching the Components artboard.
+6. Update `App.jsx` to use `AppShell`.
+
+**Estimate:** Part B is about 4 hrs.
+
+**Done when:** `npm run lint` and `npm run build` pass; the theme toggle switches light and dark and the choice survives a reload; `/styleguide` matches the Components artboard in both themes; no component outside `ui/` uses a raw hex color; Tasks 2.3 onward are built with these components.
+
+---
+
+### 2.y Backend: marriage year, relatives, member counts [x]
+**Agent brief:** The new screens need data the API does not return yet. In `backend/app/relationships.py`: (1) add an optional `marriage_year: int | None` to `RelationshipCreate` and `RelationshipResponse`, stored as a property on `MARRIED_TO` edges only (reject it with a 400 on `PARENT_OF`); (2) add `PATCH /trees/{tree_id}/relationships/{relationship_id}` that updates `marriage_year` only (400 for a `PARENT_OF` edge; 404 across trees, the same isolation as DELETE). In `backend/app/people.py`: (3) add `GET /trees/{tree_id}/people/{person_id}/relatives` returning `{parents: [{id, name}], spouses: [{id, name, marriage_year, relationship_id}], children: [{id, name}]}`; (4) make the list `GET /trees/{tree_id}/people` also return `marriage_years: [int]` per person (empty when none), using a separate list-item model so the Members table can show "Married" without one call per person. In `backend/app/trees.py`: (5) add `member_count: int` to `TreeResponse` for `GET /trees` and `GET /trees/{tree_id}` (the number of Person nodes with that `tree_id`). All Cypher stays parameterized and tree-scoped. Write integration tests for each, including cross-tree 404s, a person with two marriages and the `PARENT_OF` rejection, and run the whole suite.
+
+**Done when:** All new and existing backend tests pass; the endpoints work in `/api/docs`; creating a marriage with a year and then editing it shows up in `relatives` and in the people list.
+
+**Estimate:** ~2.5 hrs.
+
+---
+
 ### 2.3 Login and Register pages + routing [ ]
-**Agent brief:** Create `frontend/src/pages/LoginPage.jsx` and `RegisterPage.jsx`. Each should have a simple form (email + password fields, plus a name field on the register page, submit button) that calls the corresponding auth API function. On success, redirect to `/trees`. On error, show the error message. **Register must call `login(email, password)` immediately after a successful `register(...)`** (the register endpoint returns no tokens), then redirect to `/trees`. In `App.jsx`, set up React Router with routes: `/login` → LoginPage, `/register` → RegisterPage, `/trees` → placeholder "Trees page" div, `/` → redirect to `/login`. **Add a small `ProtectedRoute` wrapper that redirects to `/login` when there is no `access_token` in localStorage, and wrap `/trees` (and later `/trees/:id`) in it** so a logged-out visit never shows a page that just fails with 401. No styling required — functional only.
+**Agent brief:** Create `frontend/src/pages/LoginPage.jsx` and `RegisterPage.jsx`. Each should have a simple form (email + password fields, plus a name field on the register page, submit button) that calls the corresponding auth API function. On success, redirect to `/trees`. On error, show the error message. **Register must call `login(email, password)` immediately after a successful `register(...)`** (the register endpoint returns no tokens), then redirect to `/trees`. In `App.jsx`, set up React Router with routes: `/login` → LoginPage, `/register` → RegisterPage, `/trees` → placeholder "Trees page" div, `/` → redirect to `/login` (until the landing page exists, Task 2.10). **Add a small `ProtectedRoute` wrapper that redirects to `/login` when there is no `access_token` in localStorage, and wrap `/trees` (and later `/trees/:id`) in it** so a logged-out visit never shows a page that just fails with 401. Build both pages inside `AppShell` with the `ui/` components from Task 2.x. There are no mock-ups for them yet, so keep them simple and consistent with the tokens (a centered card on the page background); they will be restyled once designed. Also wire the header's user button to a small menu showing the user's name with a **Log out** action, so the login flow can be tested both ways.
 
 **Done when:** Can register a new user and land on `/trees` already logged in, and log in with that user from the login page. Visiting `/trees` while logged out redirects to `/login`. A wrong password shows an error on the login page instead of redirecting.
 
 ---
 
-### 2.4 Tree list and create page [ ]
-**Agent brief:** Create `frontend/src/pages/TreesPage.jsx`. On mount, call `GET /trees` and display a list of tree names. Include a simple form (just a name input) to create a new tree via `POST /trees`. After creating, refresh the list. Add a link from each tree name to `/trees/:id`. Create `frontend/src/api/trees.js` with `getTrees()` and `createTree(name)` functions. Both endpoints require login; the Task 2.2 client attaches the token automatically. The `/trees/:id` link target (TreeView) doesn't exist until Task 2.5, so following it before then lands on an empty route — expected.
+### 2.4 Trees page [ ]
+**Agent brief:** Create `frontend/src/pages/TreesPage.jsx` and `frontend/src/api/trees.js` (`getTrees()`, `createTree(name)`). Build the page from the Trees artboard using the `ui/` components inside `AppShell`: a "Trees" title and a responsive grid of cards. Each card shows a decorative graph thumbnail (a static SVG, rotated a different amount per card as in the mock-up), the tree name and "N members" (from `member_count`, Task 2.y), and links to `/trees/:id`. The last card is a dashed "New tree" card: clicking it reveals an inline name field and a create button that calls `POST /trees`, then refreshes the list. Both endpoints require login (the Task 2.2 client attaches the token). The `/trees/:id` page is Task 2.5, so the link lands on an empty route until then.
 
-**Done when:** Trees page loads, shows existing trees (only the logged-in user's own), create form works, new tree appears in the list.
-
----
-
-### 2.5 Add person form [ ]
-**Agent brief:** Create `frontend/src/pages/TreeView.jsx` (stub — just shows the tree ID for now). Create `frontend/src/components/PersonForm.jsx`: a form with fields for name (required), birth_year, death_year, birth_place, notes. On submit, call `POST /trees/{tree_id}/people`. Accept `treeId` and an `onSuccess` callback as props. Create `frontend/src/api/people.js` with `addPerson(treeId, personData)`. Add the PersonForm to TreeView, calling it with the current treeId.
-
-**Done when:** Can navigate to a tree, fill in the form, submit, and confirm the person appears in the AuraDB Aura Console.
+**Done when:** The page matches the Trees artboard in both themes, shows only the logged-in user's trees with correct member counts, and creating a tree adds a card.
 
 ---
 
-### 2.6 Add relationship form [ ]
-**Agent brief:** Create `frontend/src/components/RelationshipForm.jsx`. It should: fetch the list of people in the current tree (`GET /trees/{tree_id}/people`), show two person-select dropdowns (person A, person B), a radio/select for relationship type (PARENT_OF or MARRIED_TO), and a submit button. On submit, call `POST /trees/{tree_id}/relationships`. Accept `treeId` and `onSuccess` as props. Add it to TreeView alongside PersonForm. Create `frontend/src/api/relationships.js` with `addRelationship(treeId, data)`.
+### 2.5 Tree view page [ ]
+**Agent brief:** Create `frontend/src/pages/TreeView.jsx` for `/trees/:id`, from the tree-view artboard: inside `AppShell`, a 220px left pane and a canvas area (an empty placeholder until Task 2.7). Left pane: a Graph/Tree `PillToggle` (state only for now), a search control that expands inline into a field with a results list (calls `GET /trees/{tree_id}/people?search=`, debounced; choosing a result selects that person), "Add member", "Edit" and "Delete" actions (Edit and Delete disabled, with the tooltip "Select a person first", until someone is selected; they are wired in Task 2.6), and a "Relationship calculator" link at the bottom (inert until Task 4.3). Hold `selectedPersonId` in the page's state. When a person is selected, show the details card (top right of the canvas: name, Born, Birthplace, Married) filled from the people and relatives endpoints, with a close button; clicking empty canvas clears the selection. Show "Members" in the top bar's nav while a tree is open. Create `frontend/src/api/people.js` (`listPeople`, `getPerson`, `getRelatives`).
 
-**Done when:** Can select two people, create a PARENT_OF relationship, and verify the edge appears in the Aura Console.
-
----
-
-### 2.7 Graph visualization (rough) [ ]
-**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in `backend/app/analysis.py`). [Backend piece built early, during Task 1.9's demo-page hookup — see schedule.md.] It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props and renders them with Cytoscape.js using the `cytoscape-fcose` layout (install `cytoscape-fcose`; it's a faster, better-scaling variant of `cose` — prefer it over plain `cose` from the start, since it also naturally spaces out distant/weakly-connected branches). Mount the Cytoscape instance on a `div` that fills the available space. In TreeView, fetch the graph data on mount and render `<TreeGraph>`. No styling required.
-
-**Done when:** Navigating to a tree renders the nodes and edges from seed data as a graph. The layout is messy but the nodes are there.
+**Done when:** `/trees/:id` loads the tree's name, search finds and selects a person, the details card shows their data including the marriage year, and Edit and Delete enable and disable with the selection, in both themes.
 
 ---
 
-## Phase 3 — Algorithm, Access Control, Security (~13 hrs, ~weeks 10–13)
+### 2.6 Add, edit and delete members and relatives [ ]
+**Agent brief:** Wire up the tree view's actions. (1) "Add member" opens a form (name required; born year, birthplace, and also died year and notes since the API supports them) that calls `POST /trees/{tree_id}/people`, then selects the new person. (2) With a person selected, an "Add to X: Parent | Spouse | Child" bar appears at the bottom of the canvas (opened by the "+" button from Task 2.7). Choosing one asks for the new person's details, creates the person, then creates the relationship: Parent means `PARENT_OF` from the new person to X; Child means `PARENT_OF` from X to the new person; Spouse means `MARRIED_TO` with an optional marriage year. If the second call fails, say so and offer to retry (a person without the link may already exist). (3) "Edit" opens the same form pre-filled and calls `PATCH .../people/{person_id}`; for a spouse's marriage year it calls `PATCH .../relationships/{relationship_id}` (Task 2.y). (4) "Delete" asks for confirmation in a native `<dialog>` that says the person's relationships are removed too, then calls `DELETE`. Create `frontend/src/api/relationships.js`. Reuse the `ui/` components; there are no mock-ups for the forms or the dialog yet, so keep them simple and consistent with the tokens.
+
+**Done when:** You can add a member, add a parent, spouse (with a year) and child to someone, edit a member and a marriage year, and delete a member after confirming, with everything still there after a page refresh and visible in the Aura Console.
+
+---
+
+### 2.7 Graph visualization [ ]
+**Agent brief:** Add a `GET /trees/{tree_id}/graph` endpoint to the backend (in `backend/app/analysis.py`). [Backend piece built early, during Task 1.9's demo-page hookup — see schedule.md.] It should fetch all Person nodes in the tree and all PARENT_OF and MARRIED_TO edges between them, and return `{ nodes: [{id, name}], edges: [{source, target, type}] }`. Then in the frontend, create `frontend/src/components/TreeGraph.jsx`: a component that accepts `nodes` and `edges` props, loads them into a `graphology` graph, and renders it with Sigma.js (WebGL, chosen so trees much larger than 2,500 people stay smooth). Sigma only renders — it has no layout built in — so install `graphology-layout-forceatlas2` and use it for the force-directed layout, running it in its web-worker variant (`graphology-layout-forceatlas2/worker`) so large graphs don't freeze the page. Mount Sigma on a `div` that fills the available space, and create/destroy it inside `useEffect` (Sigma owns its own canvas, so React must not re-render it). Draw `MARRIED_TO` edges dashed using Sigma's `layerDashed`/`createEdgeProgram`. Update incrementally when props change (add only new nodes/edges to the graphology graph rather than rebuilding). In TreeView, fetch the graph data on mount and render `<TreeGraph>`. Match the design: nodes alternate `node-a` and `node-b` chosen by a hash of the person's id; edges use the `edge` color (1.4px), dashed for `MARRIED_TO`; the colors come from the CSS variables through the theme helper (Task 2.x) and update when the theme changes. Clicking a node selects it (ink ring, slightly larger) and shows the "/" (open the details card) and "+" (open the Add-relative bar, Task 2.6) buttons as HTML elements positioned next to the node with Sigma's graph-to-screen coordinate conversion; clicking empty canvas clears the selection. The graph view shows no labels. Also test it once with a synthetic graph of 10,000+ nodes to confirm the scale goal, not only the 22-person demo tree.
+
+**Done when:** Navigating to a tree renders its people and relationships as a graph in the design's colors in both themes; clicking a person selects them and shows the "/" and "+" buttons; the 10,000-node test stays interactive.
+
+---
+
+### 2.8 Members page [ ]
+**Agent brief:** Create `frontend/src/pages/MembersPage.jsx` for `/trees/:id/members`, from the Members artboard: a "Members" title, a search field (calls `GET /trees/{tree_id}/people?search=`, debounced) and a table with columns Name, Born, Birthplace and Married (`marriage_years` from Task 2.y; all years comma-separated, "—" if none). Each row links to `/trees/:id/members/:personId`. The table scrolls sideways on narrow screens.
+
+**Done when:** The page lists the current tree's people only, search filters them, rows link to the member page, and it matches the artboard in both themes.
+
+---
+
+### 2.9 Member page [ ]
+**Agent brief:** Create `frontend/src/pages/MemberPage.jsx` for `/trees/:id/members/:personId`, from the Member artboard: a "← All members" link, the member's name (Fraunces, large) with the tree name beneath, a "Show in tree" link (to `/trees/:id?selected={personId}`; TreeView selects that person on load) and an edit pencil (opens the edit form from Task 2.6). Two columns: Details (Born, Birthplace, Married; also Died and Notes when present) and Family (Parents, Spouse with the marriage year, Children, each name linking to that member's page) from `GET .../relatives` (Task 2.y). Add the `?selected=` handling to TreeView.
+
+**Done when:** A member page shows correct details and working family links, "Show in tree" opens the tree with that person selected, and it matches the artboard in both themes.
+
+---
+
+### 2.10 Landing page [ ]
+**Agent brief:** Create `frontend/src/pages/LandingPage.jsx` for `/`, from the Landing artboard: a header (logo, "How it works", "Contact", and a "Get started" button to `/register`, or to `/trees` when already logged in), a very large "See your whole family." headline (Cormorant Garamond, scaling with the viewport) and a band with the graph illustration (a static SVG). Use only the app's tokens, with no separate landing palette (decided; see `design.md`): `page` background, `ink` text, an `accent` button, and the band in `chrome` with `node-a`/`node-b` nodes and `edge` lines, so dark mode works with no extra code. "How it works" and "Contact" can scroll to placeholder sections for now. Change the `/` route to render this page.
+
+**Done when:** `/` shows the landing page in both themes and "Get started" works for logged-out and logged-in visitors.
+
+---
+
+## Phase 3 — Algorithm, Access Control, Security (~13 hrs, ~weeks 15–18)
 
 ### 3.1 Cypher BFS ancestor query [ ]
 **Agent brief:** In `backend/app/analysis.py`, write a `get_parents(person_ids, tree_id)` function (Cypher, via `core/db.py`) that returns the parents of a whole set of people, and a `get_ancestors(person_id, tree_id)` function that uses it to find all ancestors of a given person via `PARENT_OF` edges, bounded to 22 generations. Include the person themself at distance 0. Return a dict `{ancestor_id: set_of_distances}` (an ancestor reached at several distances keeps all of them).
@@ -224,57 +275,57 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 ---
 
 ### 3.8 Security hardening [ ]
-**Agent brief:** Audit the backend for these security issues and fix any found: (0) Email validation — in `auth.py`, change `UserCreate.email` from plain `str` to Pydantic's `EmailStr` (requires the `email-validator` package; add it to `requirements.txt`), so a malformed email is rejected at the API boundary instead of being stored as-is. (This was deliberately left as a plain `str` in Task 1.5 — fix it here, alongside the other security items, rather than earlier.) (1) Cypher injection — search all `.py` files for any Cypher queries built with string formatting or f-strings; replace with parameterized queries using the `neo4j` driver's parameter syntax `{param_name}`. (2) CORS — in `main.py`, configure `CORSMiddleware` to allow only `http://localhost:5173` (dev) and the production frontend URL (placeholder for now). (3) Auth endpoint rate limiting — add `slowapi` rate limiting to `POST /auth/login` and `POST /auth/register`. (4) `.gitignore` — verify `.env` is listed (plus `.venv/`, `__pycache__/`, `node_modules/`). (5) Create `.env.example` with all required env var names and placeholder values.
+**Agent brief:** Audit the backend for these security issues and fix any found: (0) Email validation — in `auth.py`, change `UserCreate.email` from plain `str` to Pydantic's `EmailStr` (requires the `email-validator` package; add it to `requirements.txt`), so a malformed email is rejected at the API boundary instead of being stored as-is. (This was deliberately left as a plain `str` in Task 1.5 — fix it here, alongside the other security items, rather than earlier.) (1) Cypher injection — search all `.py` files for any Cypher queries built with string formatting or f-strings; replace with parameterized queries using the `neo4j` driver's parameter syntax `{param_name}`. (2) CORS — in `main.py`, configure `CORSMiddleware` to allow only `http://localhost:5173` (dev) and the production frontend URL (placeholder for now). (3) Auth endpoint rate limiting — add `slowapi` rate limiting to `POST /auth/login` and `POST /auth/register`. (4) `.gitignore` — verify `.env` is listed (plus `.venv/`, `__pycache__/`, `node_modules/`). (5) Create `.env.example` with all required env var names and placeholder values. (6) Token storage — the React app keeps login tokens in `localStorage` (Task 2.2), which any injected script on the page can read. Review the options (e.g. keep the short-lived access token in memory only and store the refresh token in an `httpOnly` cookie set by the backend) and either adopt one or record why `localStorage` is acceptable for now. If adopted, it also changes Tasks 2.2/2.3 and the backend login/refresh routes.
 
-**Done when:** Grep for f-string Cypher queries returns nothing. CORS rejects requests from an unlisted origin. `.env` is not tracked by git.
+**Done when:** Grep for f-string Cypher queries returns nothing. CORS rejects requests from an unlisted origin. `.env` is not tracked by git. The token-storage decision is written in `design.md`.
 
 ---
 
-## Phase 4 — UI Updates (~10 hrs, ~weeks 14–16)
+## Phase 4 — UI Updates (~10 hrs, ~weeks 19–22)
 
-### 4.1 Traditional tree layout (Cytoscape.js) [ ]
-**Agent brief:** Install `cytoscape-dagre` and `dagre` in the frontend. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (current fcose layout) or `"tree"` (dagre hierarchical layout). In TreeView, add a toggle button that switches between the two layouts. The dagre layout should have `rankDir: "TB"` (top-to-bottom) and treat `PARENT_OF` edges as defining the hierarchy direction.
+### 4.1 Traditional tree layout (Sigma.js) [ ]
+**Agent brief:** Sigma has no built-in hierarchical layout, so compute the positions yourself: install `dagre` in the frontend, run it on the `PARENT_OF` structure (`rankdir: "TB"`, top-to-bottom, parents above children) and write the resulting `x`/`y` onto the graphology nodes. In `TreeGraph.jsx`, add a `layout` prop that accepts `"force"` (the ForceAtlas2 layout from Task 2.7) or `"tree"` (the dagre positions). In TreeView, add a toggle button that switches between the two. For very large trees dagre can be slow; if it is, evaluate `elkjs` or compute the layout on the backend, and note the result in `design.md`. The Graph/Tree toggle already exists in the left pane (Task 2.5); this task makes the Tree layout real, with the person's name shown under each node (see `design.md`, Graph styling).
 
 **Done when:** Toggle button switches between force-directed and top-down hierarchical layouts for seed data.
 
 ---
 
-### 4.2 Person detail side panel [ ]
-**Agent brief:** Create `frontend/src/components/PersonPanel.jsx`. It displays a selected person's details (name, birth year, death year, birth place, notes). It also includes an edit mode: clicking "Edit" renders the PersonForm pre-populated with that person's data; submitting calls `PATCH /trees/{tree_id}/people/{person_id}`. In TreeView, wire up Cytoscape's `tap` event on nodes to set a `selectedPersonId` state value. Render `<PersonPanel>` in a sidebar when a person is selected. Create `frontend/src/api/people.js` functions: `getPerson(treeId, personId)` and `updatePerson(treeId, personId, data)`.
-
-**Done when:** Clicking a node opens the panel with that person's data. Editing a field and saving updates the node.
+### 4.2 Person detail side panel [-]
+**Superseded.** The details card, editing and deleting are built in Tasks 2.5 and 2.6, and the full member page in Task 2.9. Nothing remains here.
 
 ---
 
 ### 4.3 Relationship-path query UI [ ]
-**Agent brief:** Create `frontend/src/components/RelationshipQuery.jsx`. It should have two person-search inputs (type-ahead search using `GET /trees/{tree_id}/people?search=`), and a "Find relationship" button. On submit, call `GET /trees/{tree_id}/relationship-path`. Display the results as a list: for each path, show the common ancestor's name and the relationship label. Show "No relationship found" if the list is empty. Add this component to TreeView (below the graph or in a sidebar section).
+**Agent brief:** Create `frontend/src/components/RelationshipQuery.jsx`. It should have two person-search inputs (type-ahead search using `GET /trees/{tree_id}/people?search=`), and a "Find relationship" button. On submit, call `GET /trees/{tree_id}/relationship-path`. Display the results as a list: for each path, show the common ancestor's name and the relationship label. Show "No relationship found" if the list is empty. Open it from the "Relationship calculator" link in the tree view's left pane (Task 2.5). No mock-up exists yet for the calculator or its results; design it first in the style of `design.md`.
 
 **Done when:** Selecting the two cousin-marriage people from seed data returns multiple labeled paths.
 
 ---
 
 ### 4.4 Branch collapse/expand [ ]
-**Agent brief:** In `TreeGraph.jsx`, implement branch collapse and expand. When a node is right-clicked (or a collapse button is clicked on the node), hide all descendant nodes and edges in the tree below it (in tree layout: hide children and their subtrees). Show a visual indicator on the collapsed node. Right-clicking again (or an expand button) restores them. This should work in both layout modes. Use Cytoscape's `hide()`/`show()` methods on elements.
+**Agent brief:** In `TreeGraph.jsx`, implement branch collapse and expand. When a node is right-clicked (or a collapse button is clicked on the node), hide all descendant nodes and edges in the tree below it (in tree layout: hide children and their subtrees). Show a visual indicator on the collapsed node. Right-clicking again (or an expand button) restores them. This should work in both layout modes. With Sigma, set the `hidden` attribute on the graphology nodes/edges (or use node/edge reducers) rather than removing them, so expanding restores them without refetching. The mock-ups have no collapse/expand control yet; design one first in the style of `design.md`.
 
 **Done when:** Collapsing a node hides its subtree. Expanding restores it. Works for a branch in the seed data.
 
 ---
 
 ### 4.5 Access management UI [ ]
-**Agent brief:** In TreeView (or a separate settings panel), add a "Share" section (visible only to the tree owner). It should: show a list of current access grants (name/email + role), include a form to add a new person by email with a role selector, allow changing a role via a dropdown, and include a "Revoke" button per entry. Wire these up to the access control endpoints from Task 3.6. Create `frontend/src/api/access.js` with the relevant API calls.
+**Agent brief:** In TreeView (or a separate settings panel), add a "Share" section (visible only to the tree owner). It should: show a list of current access grants (name/email + role), include a form to add a new person by email with a role selector, allow changing a role via a dropdown, and include a "Revoke" button per entry. Wire these up to the access control endpoints from Task 3.6. Create `frontend/src/api/access.js` with the relevant API calls. No mock-up exists yet for sharing; design it first in the style of `design.md`.
 
 **Done when:** Owner can share a tree with another test user account, change their role, and revoke access.
 
 ---
 
-### 4.6 Component library + basic polish [ ]
-**Agent brief:** Install `shadcn/ui` (or `@radix-ui/react-*` with Tailwind CSS). Replace the plain HTML form inputs and buttons in LoginPage, RegisterPage, TreesPage, PersonForm, RelationshipForm, and RelationshipQuery with shadcn/ui equivalents (Input, Button, Select, Label, Card). Add a simple top navigation bar showing the current user's email and a logout button. No major layout redesign required — just make it look consistent and not raw HTML.
+### 4.6 Final consistency pass [ ]
+**Note:** The look, the styling approach (Tailwind v4, semantic tokens, `ui/` components) and the component set are decided in Task 2.x. This task does not choose anything.
 
-**Done when:** App looks visually coherent. All forms use the component library. No raw `<input>` or `<button>` elements remain in pages/components.
+**Agent brief:** Apply the Task 2.x foundation to everything added in Phases 3–4 (relationship calculator, sharing UI, collapse/expand controls) and do a final consistency pass over every page in both themes: no raw hex colors or hard-coded sizes outside the token file, no raw `<input>` or `<button>` outside `components/ui/`, any repeated class combination extracted into a component, and a check at phone width.
+
+**Done when:** All pages look consistent in both themes, the checks above find nothing, and `/styleguide` includes every component added since Task 2.x.
 
 ---
 
-## Phase 5 — Testing & Deployment (~9.5 hrs, ~weeks 17–20)
+## Phase 5 — Testing & Deployment (~11 hrs, ~weeks 23–25)
 
 ### 5.1 Expand unit test coverage [ ]
 **Agent brief:** In `backend/tests/test_algorithm.py`, add test cases for: half-siblings (two people sharing exactly one parent), "2nd cousin once removed", a multi-path double-cousin case (two people who are both 1st cousins through two separate grandparent pairs — the function should return two paths, not one). Verify all existing tests still pass.
@@ -304,6 +355,13 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 
 ---
 
+### 5.x Deploy the frontend [ ]
+**Agent brief:** Tasks 5.2 and 5.4 only containerize and deploy the backend; something also has to host the built React app. Build it with `npm run build` (output in `frontend/dist/`, static files) and host it on a static host (e.g. Vercel, Netlify or Cloudflare Pages) or serve it from the backend. Requirements: (1) the host must serve `index.html` for every unknown path (single-page-app fallback), otherwise reloading on `/trees` returns 404; (2) `/api/*` must reach the deployed backend unchanged — either with a proxy/rewrite rule on the host (the backend already serves everything under `/api`, so no path rewriting) or by calling the backend's own URL, in which case the backend CORS setting from Task 3.8 must allow the frontend's origin; (3) HTTPS on both. Also extend the Task 5.3 CI workflow with a frontend job that runs `npm ci`, `npm run lint` and `npm run build`.
+
+**Done when:** The deployed frontend URL loads, you can register and log in against the deployed backend, and reloading directly on `/trees` still works.
+
+---
+
 ### 5.5 E2E test — critical flow (cut if short on time) [ ]
 **Agent brief:** Install Playwright in the frontend (`npm init playwright@latest`). Write one E2E test covering the critical path: register a new user → log in → create a tree → add two people → add a PARENT_OF relationship → navigate to the tree → verify both nodes appear in the graph. Run it with `npx playwright test`.
 
@@ -314,13 +372,13 @@ Before building access control (3.5–3.7), stop and reconsider the flat one-fil
 ### 5.6 Large seed script + demo data [ ]
 **Agent brief:** Expand `backend/seed/seed.py` to generate ~2,500 Person nodes across ~20 generations with realistic pedigree collapse patterns. Strategy: generate a base population of ~100 "founder" couples at the top, then each generation has children who sometimes marry cousins from the same generation (introduce cousin marriages at a rate that produces 10–20 meaningful multi-path relationship cases). Name people with generated names (can use a simple list). Run the script against the production AuraDB. Test the relationship-path endpoint against at least 3 known cousin-marriage pairs in the generated data and verify multi-path results.
 
-**Also check layout behavior at scale:** render this data in both the fcose and dagre layouts (Tasks 2.7, 4.1) and confirm that distant/weakly-connected branches visually separate and that denser branches get proportionally more space, without custom layout code. If `fcose` is too slow or cluttered at ~2,500 nodes, that's the signal to lean on branch collapse/expand (Task 4.4) and the zoom-clustering backlog item rather than writing a custom layout.
+**Also check layout behavior at scale:** render this data in both the ForceAtlas2 and dagre layouts (Tasks 2.7, 4.1) and confirm that distant/weakly-connected branches visually separate and that denser branches get proportionally more space, without custom layout code. Test at ~2,500 nodes (the minimum target) and also at 10,000+, since larger trees are an explicit goal. If either layout is too slow or cluttered at that size, that's the signal to lean on branch collapse/expand (Task 4.4), loading only part of the tree at a time (the `/graph` endpoint's root-person/depth options), and the zoom-clustering backlog item rather than writing a custom layout.
 
 **Done when:** AuraDB has ~2,500 nodes. At least 3 relationship-path queries return multiple paths with correct labels.
 
 ---
 
-## Phase 6 — Buffer & Backlog (~weeks 21–24)
+## Phase 6 — Buffer & Backlog (~weeks 26–29)
 
 ### 6.1 Address anything that slipped from earlier phases [ ]
 Review completed tasks. Note anything that was marked done but wasn't fully verified, or any known bugs discovered during demo prep.
@@ -328,16 +386,67 @@ Review completed tasks. Note anything that was marked done but wasn't fully veri
 ### 6.2 Thesis write-up support [ ]
 The implementation report needs to explain: data model choices (why no Family node), the algorithm (ancestor intersection approach), security measures implemented, and validation methodology (what the unit tests cover and why representative coverage is sufficient). Use `design.md` and `requirements.md` as source material.
 
-### 6.3 Extended Person fields [ ]
-Add the extra Person properties from the original data model notes: gender, full date of birth, Hebrew birthday, date of death (yahrzeit), and places lived. Update `people.py`, `PersonForm.jsx` and `PersonPanel.jsx`. Open decisions to settle first: how vague historical dates (e.g. "approximately 1500s") are stored alongside full dates, and whether the Hebrew date is entered or calculated from the regular date. The current Person fields are enough until then.
+### 6.3 Custom fields: per-tree fields and person values [ ]
+Replaces the old "Extended Person fields" task (gender, Hebrew birthday, date of death, places lived are now just starter fields, see 6.5). Lets each tree define its own extra metadata fields (e.g. "Zodiac sign", "Hometown"), shared by every person in that tree. Values may be left empty.
 
-### 6.5 "Home person" default focus (UI extra) [ ]
+- **Model:** a field is `{name, type}`, with `type` defaulting to `"text"` and not yet validated (typed fields such as dates are a later extension; the stored shape doesn't change). The tree stores its ordered list as `fields`. Because Neo4j can't store nested maps as properties, store the list as a JSON string on the Tree node. Each Person stores `custom` as a JSON string of `{field_name: value}`; values are always strings (a date would be an ISO string). Validate both with Pydantic (`dict[str, str]`). Empty values aren't stored.
+- **Behaviour:** all people in a tree share the same fields; no ad hoc fields on a single person. Renaming a field renames the key on every person. Deleting a field removes its values, with a confirmation in the UI.
+- **API:** `GET/PUT /trees/{id}/fields`. Person create and update accept `custom`. Editing the field list needs the owner role and editing values the editor role (depends on 3.5–3.7; until then, owner only).
+- **UI:** a "Fields" section in tree settings (add, rename, reorder, remove); `PersonForm.jsx` renders one input per field; `PersonPanel.jsx` lists the non-empty values.
+- Estimate: ~3 hrs.
+
+### 6.4 Custom field templates: user library [ ]
+Name still open ("field template" / "field set" / "profile"). A user can save a named list of fields and reuse it across their trees. Depends on 6.3.
+
+- **Model:** `(User)-[:OWNS]->(FieldTemplate {id, name, fields_json})`, where `fields_json` is the same `[{name, type}]` list as a tree's fields. Names only, no default values.
+- **Apply = copy, not link.** Applying a template copies its fields into the tree (skipping names that already exist), so the tree stays self-contained, collaborators don't need access to the owner's library, and later edits or deletion of the template never affect existing trees. A tree may have several templates applied. Optionally record `source_template_id` as a hint; an "update from template" diff/merge is out of scope.
+- **API:** `GET/POST/PATCH/DELETE /me/field-templates`; `POST /trees/{id}/fields/apply` with `{template_id}`.
+- **UI:** a "My templates" page (create a template by naming it and adding fields); "Apply a template" in tree settings; a "Save these fields as a template" shortcut on a tree.
+- Possible later additions: export/import a template as JSON for sharing between users.
+- Estimate: ~2–3 hrs.
+
+### 6.5 Starter field templates [ ]
+Ship a few read-only, system-defined templates so the feature is useful immediately and covers the fields from the old "Extended Person fields" task: "Standard" (gender, date of birth, Hebrew birthday, date of death / yahrzeit, places lived), "Zodiac & birthday", "Residence history" (e.g. "Lived in (childhood)", "Lived in (adult)"). Served by `GET /field-templates/starters` from a constant in the backend (not stored in the DB), applied the same way as user templates (6.4), with a "Duplicate to my templates" action. Vague historical dates and a calculated Hebrew date are no longer blockers because values are free text; revisit when typed fields are added. Estimate: ~1–2 hrs.
+
+### 6.6 Bulk add: "Add parents" and "Add N children" [ ]
+Speeds up building a tree by creating several blank people and their relationships in one action, instead of the one-at-a-time flow in 2.6. Chosen over a pre-shaped "seed tree" (couple plus N children per generation), which would be symmetric and unrealistic and leave users deleting placeholders. Depends on 2.6 (add relatives) and 2.7.
+
+- **Add parents:** from a selected person X, creates two new people, a `MARRIED_TO` edge between them, and a `PARENT_OF` edge from each to X, all in one Neo4j transaction. If X already has one parent, offer to add only the missing one (and marry them to the existing parent); if X already has two, hide the action (`PARENT_OF` has no count limit, but the bulk action targets the common case).
+- **Add N children:** from X, creates N new people with `PARENT_OF` from X to each. If X has spouses, let the user pick the other parent (or none); the same `PARENT_OF` edge is then added from that person too. N is capped at about 20 and validated server-side.
+- **New people are fully empty:** `name` is required by the model, so they are named just "Person" and nothing else is set (all other fields, and any custom fields from 6.3, are blank). The user fills them in later through the normal edit form.
+- **Backend:** one repository function that creates the people and relationships in a single transaction, so a failure leaves nothing half-created (this also avoids the partial-failure retry case in 2.6). Endpoints e.g. `POST /trees/{id}/people/{person_id}/add-parents` and `.../add-children` with `{count, other_parent_id?}`; both return the created people and relationships so the graph can update without a refetch. Guarded like the other tree endpoints (editor role once 3.7 lands).
+- **UI:** two new items in the "Add to X" bar from 2.6/2.7, with a small count input for children. Newly created nodes are selected or highlighted so they're easy to find, and several identically named "Person" nodes should be easy to tell apart (e.g. by position, or by "Child 1 of X" shown until renamed, if it can be done without storing it as the name).
+- **Possible later addition:** "Add spouse and N children" as a combined action, or pasting a list of names to create people with proper names.
+- Estimate: ~3–4 hrs.
+
+**Done when:** From a person you can add two married parents and N empty children in one click each, every created person and edge is visible and persists after a refresh, and a forced failure mid-way leaves nothing behind.
+
+### 6.7 Describe a family by voice (AI chart generation) [ ]
+A user speaks (or types) a description of a family and AI generates the tree diagram, so they can get a rough graph quickly and clean it up afterwards. Main use case: a quick visual of a small family to explain who everyone is to someone unfamiliar (e.g. a newcomer to the family, or someone researching a distant branch). Depends on 2.7 (graph) and 6.6 (shared single-transaction bulk-create function).
+
+**Direction (details deliberately left for later):**
+- Speech to text, always followed by an editable transcript (a plain text box is the fallback and the easiest way to test).
+- An LLM turns the transcript into structured data (people with temporary ids, `PARENT_OF` and `MARRIED_TO` pairs, optional marriage year). The user is asked who "I" is up front so relative terms ("my mother's second husband") can be resolved.
+- Deterministic validation in Python (Pydantic, reject cycles and impossible structures, flag ambiguity). The LLM only extracts structure; relationship logic stays in tested code.
+- The result is shown as a preview in the existing graph view; on confirm it is saved via the 6.6 bulk-create function.
+
+**Open decisions:**
+- Whether the generated tree is stored in the DB before the user confirms, or held client-side as a draft until then.
+- Whether a no-account "draft" mode and image export are included (fits the "explain a family" use case).
+- How corrections work (edit the preview by hand vs. spoken corrections like "no, Dina is his sister").
+- Which speech-to-text option (browser Web Speech API vs. a hosted transcription API) and which LLM.
+- Handling relations outside the current model (step, adoptive, in-law, "cousin"): `PARENT_OF` is biological only, so these may need clarification prompts or be rejected.
+- Privacy and cost: family details go to third-party services (disclose; note in 3.8) and each call costs money (per-user rate limits).
+
+**Likely split:** (1) structured extraction from text plus validation, backend only, testable without audio; (2) draft preview UI and confirm-and-save; (3) voice input and transcript review; (4) optional spoken corrections and image export. Estimate ~12–20 hrs depending on the correction UI.
+
+### 6.8 "Home person" default focus (UI extra) [ ]
 Give the graph view a sensible default center when no `root_person_id` is passed — not a root in the data-structure sense (the graph has none, and this has no security meaning), purely a UI convenience computed on the fly, not stored. Add a repository/service function that computes a reasonable default each time it's requested, e.g. the person with the most generations beneath them (largest descendant depth), or most total descendants — run as a query at request time, not persisted on the Tree node. Wire `GET /trees/{tree_id}/graph` to use this when `root_person_id` is omitted. Nice-to-have, not required for the demo; revisit the exact "biggest generation chain" metric when this is picked up.
 
-### 6.6 Invite by email (pre-registration sharing) [ ]
+### 6.9 Invite by email (pre-registration sharing) [ ]
 Let a tree owner share a tree with someone who hasn't registered yet, by email (like a Google Doc invite), per the earlier discussion. Needs: a pending `Invite` record (email, tree_id, role) OR a placeholder `User` node created with just an email; when someone registers with that email, turn the invite into a real `HAS_ACCESS` edge. Requires email verification at registration — otherwise anyone could register with an invited email and claim that access. Build only after core sharing (3.5–3.7) works for already-registered users.
 
-### 6.4 Backlog (only if time allows, in priority order) [ ]
+### 6.10 Backlog (only if time allows, in priority order) [ ]
 1. GEDCOM import/export
 2. In-law relationship paths via MARRIED_TO traversal
 3. `KNOWN_DESCENDANT_OF` edge type for undocumented historical ancestors
