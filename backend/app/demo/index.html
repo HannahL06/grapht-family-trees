@@ -1,0 +1,314 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Grapht — backend demo</title>
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; display: flex; }
+    #sidebar { width: 320px; padding: 16px; box-sizing: border-box; border-right: 1px solid #ccc; }
+    #graph { flex: 1; height: 100vh; }
+    fieldset { margin-bottom: 16px; }
+    label { display: block; margin-top: 6px; font-size: 13px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 4px; }
+    button { margin-top: 8px; width: 100%; padding: 6px; }
+    #status { font-size: 12px; color: #666; min-height: 1.5em; }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Grapht</h2>
+    <div id="status"></div>
+
+    <fieldset id="login-box">
+      <legend>Log in</legend>
+      <label>Email <input id="login-email" type="email" autocomplete="username" /></label>
+      <label>Password <input id="login-password" type="password" autocomplete="current-password" /></label>
+      <button onclick="login()">Log in</button>
+    </fieldset>
+
+    <div id="app-forms" hidden>
+
+    <fieldset>
+      <legend>Add person</legend>
+      <label>Name <input id="person-name" /></label>
+      <label>Birth year <input id="person-birth-year" type="number" /></label>
+      <button onclick="addPerson()">Add person</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Add spouse</legend>
+      <label>Existing person
+        <select id="spouse-of"></select>
+      </label>
+      <label>New spouse's name <input id="spouse-name" /></label>
+      <label>Birth year <input id="spouse-birth-year" type="number" /></label>
+      <button onclick="addSpouse()">Add spouse</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Add child</legend>
+      <label>Parent
+        <select id="child-parent"></select>
+      </label>
+      <label>Second parent (optional)
+        <select id="child-second-parent">
+          <option value="">(none)</option>
+        </select>
+      </label>
+      <label>Child's name <input id="child-name" /></label>
+      <label>Birth year <input id="child-birth-year" type="number" /></label>
+      <button onclick="addChild()">Add child</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Link existing child</legend>
+      <label>Parent (existing)
+        <select id="link-child-parent"></select>
+      </label>
+      <label>Child (existing)
+        <select id="link-child-child"></select>
+      </label>
+      <button onclick="linkChild()">Link as child</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Link existing parent</legend>
+      <label>Child (existing)
+        <select id="link-parent-child"></select>
+      </label>
+      <label>Parent (existing)
+        <select id="link-parent-parent"></select>
+      </label>
+      <button onclick="linkParent()">Link as parent</button>
+    </fieldset>
+    </div>
+  </div>
+  <div id="graph"></div>
+
+  <script>
+    // This page talks to the REAL tree-scoped API (Tasks 1.6-1.8, 2.7),
+    // not any demo-only backend logic. TREE_ID is hardcoded only because
+    // this is a one-tree demo page -- the real app lets you pick a tree.
+    const TREE_ID = 'sample-fam';
+    let cy;
+
+    // Held in memory only, so reloading the page means logging in again.
+    // That's fine for a demo page and avoids storing a token in localStorage.
+    let accessToken = null;
+
+    // Every data call goes through here so none can forget the token.
+    async function api(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        showLogin('Session expired. Please log in again.');
+        throw new Error('unauthorized');
+      }
+      return res;
+    }
+
+    function showLogin(message) {
+      accessToken = null;
+      document.getElementById('login-box').hidden = false;
+      document.getElementById('app-forms').hidden = true;
+      if (message) setStatus(message, true);
+    }
+
+    async function login() {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      if (!email || !password) return setStatus('Enter your email and password.', true);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) return setStatus('Login failed. Check your email and password.', true);
+      accessToken = (await res.json()).access_token;
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-box').hidden = true;
+      document.getElementById('app-forms').hidden = false;
+      setStatus('Logged in.');
+      await refreshGraph();
+    }
+
+    function setStatus(msg, isError) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.style.color = isError ? 'crimson' : '#666';
+    }
+
+    async function createRelationship(personAId, personBId, type) {
+      return api(`/api/trees/${TREE_ID}/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_a_id: personAId, person_b_id: personBId, type }),
+      });
+    }
+
+    async function refreshGraph() {
+      const res = await api(`/api/trees/${TREE_ID}/graph`);
+      const data = await res.json();
+
+      const nodeEls = data.nodes.map(n => ({ data: { id: n.id, label: n.name } }));
+      const edgeEls = data.edges.map(e => ({
+        data: {
+          id: `${e.type}:${e.source}->${e.target}`,
+          source: e.source,
+          target: e.target,
+          label: e.type,
+        },
+        classes: e.type,
+      }));
+
+      if (!cy) {
+        cy = cytoscape({
+          container: document.getElementById('graph'),
+          elements: [...nodeEls, ...edgeEls],
+          style: [
+            { selector: 'node', style: { label: 'data(label)', 'background-color': '#4a90d9', color: '#000', 'text-valign': 'bottom', 'font-size': 10 } },
+            { selector: 'edge', style: { 'curve-style': 'bezier', 'target-arrow-shape': 'none', width: 1.5, 'line-color': '#999' } },
+            { selector: 'edge.MARRIED_TO', style: { 'line-style': 'dashed' } },
+          ],
+          layout: { name: 'cose' },
+        });
+      } else {
+        // Only add elements that aren't already on the graph, so existing
+        // nodes keep their positions instead of the whole layout reshuffling.
+        const existingNodeIds = new Set(cy.nodes().map(n => n.id()));
+        const existingEdgeIds = new Set(cy.edges().map(e => e.id()));
+        const newNodeEls = nodeEls.filter(n => !existingNodeIds.has(n.data.id));
+        const newEdgeEls = edgeEls.filter(e => !existingEdgeIds.has(e.data.id));
+
+        if (newNodeEls.length || newEdgeEls.length) {
+          const unchanged = cy.nodes();
+          unchanged.lock();
+          const added = cy.add([...newNodeEls, ...newEdgeEls]);
+          cy.layout({ name: 'cose', fit: false }).run();
+          unchanged.unlock();
+          cy.fit(undefined, 30);
+        }
+      }
+
+      await refreshPeopleDropdowns();
+    }
+
+    async function refreshPeopleDropdowns() {
+      const res = await api(`/api/trees/${TREE_ID}/people`);
+      const people = await res.json();
+      const options = people.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+      document.getElementById('spouse-of').innerHTML = options;
+      document.getElementById('child-parent').innerHTML = options;
+      document.getElementById('child-second-parent').innerHTML =
+        '<option value="">(none)</option>' + options;
+      document.getElementById('link-child-parent').innerHTML = options;
+      document.getElementById('link-child-child').innerHTML = options;
+      document.getElementById('link-parent-child').innerHTML = options;
+      document.getElementById('link-parent-parent').innerHTML = options;
+    }
+
+    async function addPerson() {
+      const name = document.getElementById('person-name').value.trim();
+      if (!name) return setStatus('Name is required.', true);
+      const birth_year = document.getElementById('person-birth-year').value || null;
+      const res = await api(`/api/trees/${TREE_ID}/people`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
+      });
+      if (!res.ok) return setStatus('Failed to add person.', true);
+      document.getElementById('person-name').value = '';
+      document.getElementById('person-birth-year').value = '';
+      setStatus(`Added ${name}.`);
+      await refreshGraph();
+    }
+
+    async function addSpouse() {
+      // Two real API calls, not one: create the new person, then link them.
+      const person_id = document.getElementById('spouse-of').value;
+      const name = document.getElementById('spouse-name').value.trim();
+      if (!person_id || !name) return setStatus('Pick a person and enter a spouse name.', true);
+      const birth_year = document.getElementById('spouse-birth-year').value || null;
+
+      const createRes = await api(`/api/trees/${TREE_ID}/people`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
+      });
+      if (!createRes.ok) return setStatus('Failed to create spouse.', true);
+      const spouse = await createRes.json();
+
+      const linkRes = await createRelationship(person_id, spouse.id, 'MARRIED_TO');
+      if (!linkRes.ok) return setStatus('Created spouse, but failed to link them.', true);
+
+      document.getElementById('spouse-name').value = '';
+      document.getElementById('spouse-birth-year').value = '';
+      setStatus(`Added spouse ${name}.`);
+      await refreshGraph();
+    }
+
+    async function addChild() {
+      // Two or three real API calls: create the child, then link each parent.
+      const parent_id = document.getElementById('child-parent').value;
+      const second_parent_id = document.getElementById('child-second-parent').value || null;
+      const name = document.getElementById('child-name').value.trim();
+      if (!parent_id || !name) return setStatus('Pick a parent and enter a child name.', true);
+      const birth_year = document.getElementById('child-birth-year').value || null;
+
+      const createRes = await api(`/api/trees/${TREE_ID}/people`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, birth_year: birth_year ? Number(birth_year) : null }),
+      });
+      if (!createRes.ok) return setStatus('Failed to create child.', true);
+      const child = await createRes.json();
+
+      const parentIds = [parent_id, ...(second_parent_id ? [second_parent_id] : [])];
+      for (const pid of parentIds) {
+        const linkRes = await createRelationship(pid, child.id, 'PARENT_OF');
+        if (!linkRes.ok) return setStatus('Created child, but failed to link a parent.', true);
+      }
+
+      document.getElementById('child-name').value = '';
+      document.getElementById('child-birth-year').value = '';
+      setStatus(`Added child ${name}.`);
+      await refreshGraph();
+    }
+
+    async function linkChild() {
+      const parent_id = document.getElementById('link-child-parent').value;
+      const child_id = document.getElementById('link-child-child').value;
+      if (!parent_id || !child_id) return setStatus('Pick both a parent and a child.', true);
+      if (parent_id === child_id) return setStatus('Parent and child must be different people.', true);
+
+      const res = await createRelationship(parent_id, child_id, 'PARENT_OF');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return setStatus(err.detail || 'Failed to link child.', true);
+      }
+      setStatus('Linked existing child.');
+      await refreshGraph();
+    }
+
+    async function linkParent() {
+      const child_id = document.getElementById('link-parent-child').value;
+      const parent_id = document.getElementById('link-parent-parent').value;
+      if (!parent_id || !child_id) return setStatus('Pick both a child and a parent.', true);
+      if (parent_id === child_id) return setStatus('Parent and child must be different people.', true);
+
+      const res = await createRelationship(parent_id, child_id, 'PARENT_OF');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return setStatus(err.detail || 'Failed to link parent.', true);
+      }
+      setStatus('Linked existing parent.');
+      await refreshGraph();
+    }
+
+    // Nothing loads until login() succeeds and calls refreshGraph().
+  </script>
+</body>
+</html>
