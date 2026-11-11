@@ -38,3 +38,18 @@ export const SunIcon = svg(
   </>,
 )
 export const MoonIcon = svg(<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z" />)
+export const SearchIcon = svg(
+  <>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4.5 4.5" />
+  </>,
+)
+export const CloseIcon = svg(<path d="M6 6l12 12M18 6L6 18" />)
+export const RelationshipIcon = svg(
+  <>
+    <circle cx="6" cy="6" r="2.5" />
+    <circle cx="18" cy="6" r="2.5" />
+    <circle cx="12" cy="18" r="2.5" />
+    <path d="M8 7.5l3 8M16 7.5l-3 8M8.5 6h7" />
+  </>,
+)

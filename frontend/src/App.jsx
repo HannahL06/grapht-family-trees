@@ -1,19 +1,11 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { isLoggedIn } from './api/auth'
 import ProtectedRoute from './components/ProtectedRoute'
-import { AppShell } from './components/ui'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import Styleguide from './pages/Styleguide'
-
-// Placeholder until Task 2.4
-function TreesPlaceholder() {
-  return (
-    <AppShell>
-      <h1 className="font-display text-5xl font-semibold">Trees</h1>
-    </AppShell>
-  )
-}
+import TreesPage from './pages/TreesPage'
+import TreeView from './pages/TreeView'
 
 function App() {
   return (
@@ -25,7 +17,15 @@ function App() {
           path="/trees"
           element={
             <ProtectedRoute>
-              <TreesPlaceholder />
+              <TreesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/trees/:id"
+          element={
+            <ProtectedRoute>
+              <TreeView />
             </ProtectedRoute>
           }
         />

@@ -15,6 +15,10 @@
    ------------------------------------------------------------------ */
 :root {
   --page: #ffffff;
+  --canvas: #f2f8fc;
+  --card: #ffffff;
+  --hover: #e8f3fb;
+  --off: #8591a3;
   --chrome: #dcecf8;
   --rule: #d3e6f5;
   --ink: #0f2a43;
@@ -31,6 +35,10 @@
 
 [data-theme='dark'] {
   --page: #0f1724;
+  --canvas: #0b121e;
+  --card: #142033;
+  --hover: #1a2638;
+  --off: #5d6b82;
   --chrome: #1c2940;
   --rule: #22314a;
   --ink: #e6ecf5;
@@ -49,6 +57,10 @@
    CSS variables, so switching [data-theme] re-colors everything live. */
 @theme inline {
   --color-page: var(--page);
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-hover: var(--hover);
+  --color-off: var(--off);
   --color-chrome: var(--chrome);
   --color-rule: var(--rule);
   --color-ink: var(--ink);
