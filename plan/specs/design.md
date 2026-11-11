@@ -167,6 +167,7 @@ If it gets unwieldy in Phase 4, add Zustand (lightweight).
 - Node click fires a callback (Sigma's `clickNode` event) → updates selected person in parent state → opens `PersonPanel`.
 - Trade-off accepted: more assembly than Cytoscape (renderer + layout packages + hand-built collapse/expand), in exchange for headroom at scale.
 - Rendering speed is only one limit on large trees. Fetching, laying out and drawing the whole tree at 10,000+ people will also need loading a part of the tree at a time (the `/graph` endpoint's planned root-person/depth options) and clustering when zoomed out.
+- **Measured 2026-11-11 (10,000 people, 14,000 links):** the dominant costs were the database round trips and the layout, not the drawing. `GET /graph` went from ~5 s to ~2 s by (a) fetching whole results in one round trip in `run_query` (`fetch_size=-1`; the default pages 1,000 rows per round trip), (b) returning nodes and edges as two lists in one row, and (c) returning `JSONResponse` so FastAPI does not run `jsonable_encoder` over 24,000 items (~0.6 s). The Tree view layout is the other scaling limit: dagre took 25 s for 2,500 people (3 s with its `longest-path` ranker, still ~45 s extrapolated to 10,000), so trees above 1,500 couples use a simple linear-time layered layout (0.2 s for 10,000) with a barycenter ordering. The Graph view (ForceAtlas2 in a worker) never blocks the page.
 - The `/demo` page is separate throwaway code and still uses Cytoscape from a CDN; it is not part of this decision.
 
 ---

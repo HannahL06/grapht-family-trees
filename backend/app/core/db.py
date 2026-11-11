@@ -30,8 +30,15 @@ def close_driver() -> None:
 
 
 def run_query(query: str, params: dict | None = None) -> list[dict]:
-    records, _, _ = get_driver().execute_query(query, params or {})
-    return [record.data() for record in records]
+    # fetch_size=-1: ask for the whole result in one round trip. We load every
+    # row into a list anyway, and the default (1,000 rows per round trip) cost
+    # roughly 1 s per 10,000 rows against a remote AuraDB. execute_write keeps
+    # the automatic retry on transient errors that execute_query had.
+    def work(tx):
+        return [record.data() for record in tx.run(query, params or {})]
+
+    with get_driver().session(fetch_size=-1) as session:
+        return session.execute_write(work)
 
 
 def test_connection() -> None:

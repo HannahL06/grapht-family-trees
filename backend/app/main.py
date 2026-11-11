@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.core.db import close_driver
 from app.analysis import router as analysis_router
@@ -33,6 +34,9 @@ app = FastAPI(
     redoc_url=f"{API_PREFIX}/redoc",
     openapi_url=f"{API_PREFIX}/openapi.json",
 )
+# Compress responses over 1 KB. The graph of a 10,000-person tree is ~2.5 MB of
+# repetitive JSON, which gzip shrinks several times over.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(trees_router, prefix=API_PREFIX)
 app.include_router(people_router, prefix=API_PREFIX)
 app.include_router(relationships_router, prefix=API_PREFIX)

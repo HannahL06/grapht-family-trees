@@ -9,11 +9,13 @@ import {
   updatePerson,
 } from '../api/people'
 import { createRelationship, updateMarriage } from '../api/relationships'
+import { getGraph } from '../api/graph'
 import { getTree } from '../api/trees'
 import AddRelativeBar from '../components/AddRelativeBar'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import MemberCard from '../components/MemberCard'
 import MemberFormDialog from '../components/MemberFormDialog'
+import TreeGraph from '../components/TreeGraph'
 import TreeSidebar from '../components/TreeSidebar'
 import { AppShell } from '../components/ui'
 
@@ -23,8 +25,10 @@ export default function TreeView() {
   const { id: treeId } = useParams()
   const [tree, setTree] = useState(null)
   const [error, setError] = useState('')
-  const [view, setView] = useState('graph') // 'graph' | 'tree' (drawn in Task 2.7)
+  const [view, setView] = useState('graph') // 'graph' | 'tree'
+  const [graphData, setGraphData] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  const [cardOpen, setCardOpen] = useState(false) // details card, opened with "/"
   const [detail, setDetail] = useState(null)
   const [version, setVersion] = useState(0) // bump to reload the selected person
   const [adding, setAdding] = useState(false) // "Add to X" bar open
@@ -41,6 +45,17 @@ export default function TreeView() {
       .catch((err) => setError(errorMessage(err)))
   }, [treeId])
 
+  // The whole tree's people and links; reloaded after every change.
+  useEffect(() => {
+    let cancelled = false
+    getGraph(treeId)
+      .then((data) => !cancelled && setGraphData(data))
+      .catch((err) => !cancelled && setError(errorMessage(err)))
+    return () => {
+      cancelled = true
+    }
+  }, [treeId, version])
+
   // Load the selected person + relatives; ignore replies for an old selection.
   useEffect(() => {
     if (!selectedId) return
@@ -53,10 +68,14 @@ export default function TreeView() {
     }
   }, [treeId, selectedId, version])
 
-  const card = selectedId && detail?.person.id === selectedId ? detail : null
+  // Selected person's data, available once loaded (Edit/Delete use it)
+  const loaded = selectedId && detail?.person.id === selectedId ? detail : null
+  // The details card only shows after "/" is pressed
+  const card = cardOpen ? loaded : null
 
   function select(id) {
     setSelectedId(id)
+    setCardOpen(false)
     setAdding(false)
   }
 
@@ -78,7 +97,7 @@ export default function TreeView() {
 
   async function submitEdit(values) {
     await updatePerson(treeId, selectedId, values.person)
-    for (const s of card.relatives.spouses) {
+    for (const s of loaded.relatives.spouses) {
       const now = values.marriages[s.relationship_id]
       if (!now) continue
       // send only what changed
@@ -115,6 +134,7 @@ export default function TreeView() {
     await deletePerson(treeId, selectedId)
     select(null)
     setDetail(null)
+    setVersion((v) => v + 1)
   }
 
   if (error) {
@@ -135,29 +155,36 @@ export default function TreeView() {
         hasSelection={Boolean(selectedId)}
         onPick={select}
         onAdd={() => setDialog({ type: 'add' })}
-        onEdit={() => card && setDialog({ type: 'edit' })}
-        onDelete={() => card && setDialog({ type: 'delete' })}
+        onEdit={() => loaded && setDialog({ type: 'edit' })}
+        onDelete={() => loaded && setDialog({ type: 'delete' })}
       />
-      {/* Clicking empty canvas clears the selection */}
-      <main
-        onClick={() => select(null)}
-        className="relative min-h-[520px] min-w-0 flex-[999_1_560px] overflow-hidden bg-canvas"
-      >
-        {/* The Sigma graph replaces this placeholder in Task 2.7 */}
-        <div className="absolute inset-0 flex items-center justify-center text-muted">
-          The {view === 'graph' ? 'graph' : 'tree'} will be drawn here.
-        </div>
+      {/* Clicking a person selects them; clicking empty canvas clears the
+          selection (both handled inside TreeGraph). */}
+      <main className="relative min-h-[520px] min-w-0 flex-[999_1_560px] overflow-hidden bg-canvas">
+        <TreeGraph
+          data={graphData}
+          view={view}
+          selectedId={selectedId}
+          onSelect={select}
+          onOpenDetails={() => {
+            setCardOpen(true)
+            setAdding(false)
+          }}
+          onAddRelative={() => {
+            setAdding(true)
+            setCardOpen(false)
+          }}
+        />
         {card && (
           <MemberCard
             person={card.person}
             relatives={card.relatives}
-            onClose={() => select(null)}
-            onAddRelative={() => setAdding(true)}
+            onClose={() => setCardOpen(false)}
           />
         )}
-        {card && adding && (
+        {loaded && adding && (
           <AddRelativeBar
-            name={card.person.name}
+            name={loaded.person.name}
             onChoose={(kind) => setDialog({ type: 'relative', kind })}
             onClose={() => setAdding(false)}
           />
@@ -172,27 +199,27 @@ export default function TreeView() {
           onClose={closeDialog}
         />
       )}
-      {dialog?.type === 'edit' && card && (
+      {dialog?.type === 'edit' && loaded && (
         <MemberFormDialog
-          title={`Edit ${card.person.name}`}
-          person={card.person}
-          spouses={card.relatives.spouses}
+          title={`Edit ${loaded.person.name}`}
+          person={loaded.person}
+          spouses={loaded.relatives.spouses}
           onSubmit={submitEdit}
           onClose={closeDialog}
         />
       )}
-      {dialog?.type === 'relative' && card && (
+      {dialog?.type === 'relative' && loaded && (
         <MemberFormDialog
-          title={`Add ${dialog.kind} of ${card.person.name}`}
+          title={`Add ${dialog.kind} of ${loaded.person.name}`}
           submitLabel="Add"
           askMarriageYear={dialog.kind === 'spouse'}
           onSubmit={(values) => submitRelative(dialog.kind, values)}
           onClose={closeDialog}
         />
       )}
-      {dialog?.type === 'delete' && card && (
+      {dialog?.type === 'delete' && loaded && (
         <ConfirmDeleteDialog
-          name={card.person.name}
+          name={loaded.person.name}
           onConfirm={confirmDelete}
           onClose={closeDialog}
         />
