@@ -217,7 +217,10 @@ Radii: 12 (rows), 16 (logo pill, graph panel), 20 (cards), 24 (tree cards), 48 (
 
 ### Graph styling
 - Nodes alternate `node-a` and `node-b` purely for visual variety; the colors carry no meaning. Assign by a hash of the person's id so a person keeps the same color between loads.
-- Selected node: ink ring (2.5px) and slightly larger. Edges use `edge`, 1.4px; `MARRIED_TO` is dashed, `PARENT_OF` solid. The graph view shows no labels; the Tree view shows the name under each node.
+- Selected node: ink ring (2.5px) and slightly larger. Edges use `edge`, 1.4px; `MARRIED_TO` is dashed, `PARENT_OF` solid. **Labels (decided 2026-11-11):** the Graph view shows a person's name only when zoomed in close enough to read it; the Tree view shows the name under each node.
+- **Click behavior (decided 2026-11-11, matches the mock-up):** clicking a person only selects them and shows the "/" and "+" buttons beside them. The details card opens when "/" is pressed. "+" opens the "Add to X: Parent | Spouse | Child" bar.
+- **Start view (decided 2026-11-11):** a tree opens as the whole tree in Graph view. Loading by neighborhood (a few generations around a person) is Phase 4 work for very large trees.
+- **Multiple marriages in the Tree view (decided 2026-11-11):** a person with several marriages sits in the middle of a row with their spouses beside them. The **current** spouse is the one right next to the person; **past** (divorced) marriages sit further out and their marriage lines are faded grey. A marriage is past when its `divorced` flag is true (a boolean on `MARRIED_TO` with an optional `divorce_year`, Task 2.z, both editable in the Edit dialog).
 - The "/" and "+" buttons are ordinary HTML elements positioned over the canvas next to the selected node (using Sigma's graph-to-screen coordinate conversion), not canvas drawing.
 - Sigma draws on a canvas, so it cannot use CSS classes. Read the token values from the CSS variables (`getComputedStyle(document.documentElement)`) on mount and whenever the theme changes, so the graph follows the same single source.
 

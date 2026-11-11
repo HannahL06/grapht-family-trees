@@ -97,7 +97,17 @@ function PersonSearch({ treeId, onPick }) {
   )
 }
 
-export default function TreeSidebar({ treeId, treeName, view, onViewChange, hasSelection, onPick }) {
+export default function TreeSidebar({
+  treeId,
+  treeName,
+  view,
+  onViewChange,
+  hasSelection,
+  onPick,
+  onAdd,
+  onEdit,
+  onDelete,
+}) {
   const tip = hasSelection ? undefined : 'Select a person first'
   const action = (enabled) =>
     `${row} ${enabled ? 'cursor-pointer text-ink hover:bg-hover' : 'cursor-default text-off'}`
@@ -121,14 +131,29 @@ export default function TreeSidebar({ treeId, treeName, view, onViewChange, hasS
       </div>
       <PersonSearch treeId={treeId} onPick={onPick} />
       <div className="flex flex-col gap-1">
-        {/* Add / Edit / Delete are wired up in Task 2.6 */}
-        <button type="button" className={`${row} cursor-pointer font-bold text-accent hover:bg-hover`}>
+        <button
+          type="button"
+          onClick={onAdd}
+          className={`${row} cursor-pointer font-bold text-accent hover:bg-hover`}
+        >
           <PlusIcon size={22} /> Add member
         </button>
-        <button type="button" disabled={!hasSelection} title={tip} className={action(hasSelection)}>
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={!hasSelection}
+          title={tip}
+          className={action(hasSelection)}
+        >
           <PencilIcon size={22} className={hasSelection ? 'text-muted' : 'opacity-60'} /> Edit
         </button>
-        <button type="button" disabled={!hasSelection} title={tip} className={action(hasSelection)}>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={!hasSelection}
+          title={tip}
+          className={action(hasSelection)}
+        >
           <TrashIcon size={22} className={hasSelection ? 'text-muted' : 'opacity-60'} /> Delete
         </button>
       </div>

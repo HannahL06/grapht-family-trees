@@ -1,7 +1,7 @@
 import { CloseIcon } from './ui'
 
 /** Details card shown on the canvas for the selected person. */
-export default function MemberCard({ person, relatives, onClose }) {
+export default function MemberCard({ person, relatives, onClose, onAddRelative }) {
   const years = relatives.spouses
     .map((s) => s.marriage_year)
     .filter((y) => y != null)
@@ -35,6 +35,14 @@ export default function MemberCard({ person, relatives, onClose }) {
           </div>
         ))}
       </div>
+      {/* Temporary trigger: Task 2.7 adds the "+" button next to the node on the graph. */}
+      <button
+        type="button"
+        onClick={onAddRelative}
+        className="mt-4 min-h-11 cursor-pointer rounded-full bg-chrome px-5 text-[15px] font-medium text-ink hover:opacity-90"
+      >
+        Add relative
+      </button>
     </div>
   )
 }

@@ -520,6 +520,112 @@ def test_tree_member_count(authed_client):
         authed_client.delete(f"/api/trees/{tid}")
 
 
+# --- Divorced flag and divorce year (Task 2.z) ---------------------------
+
+def _patch_rel(authed_client, tree_id, rel_id, **fields):
+    return authed_client.patch(f"/api/trees/{tree_id}/relationships/{rel_id}", json=fields)
+
+
+def test_divorced_defaults_false_and_round_trips(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    r = _marry(authed_client, tree_a, a, b, marriage_year=1970)
+    assert r.json()["divorced"] is False
+    assert r.json()["divorce_year"] is None
+    rel_id = r.json()["relationship_id"]
+
+    r = _patch_rel(authed_client, tree_a, rel_id, divorced=True)
+    assert r.json()["divorced"] is True
+    assert r.json()["marriage_year"] == 1970  # PATCH only changes what was sent
+
+    r = _patch_rel(authed_client, tree_a, rel_id, divorce_year=1985)
+    assert r.json()["divorced"] is True and r.json()["divorce_year"] == 1985
+
+    # un-divorcing clears the year
+    r = _patch_rel(authed_client, tree_a, rel_id, divorced=False)
+    assert r.json()["divorced"] is False and r.json()["divorce_year"] is None
+    assert r.json()["marriage_year"] == 1970
+
+
+def test_divorce_year_implies_divorced_on_create(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    r = _marry(authed_client, tree_a, a, b, divorce_year=1990)
+    assert r.status_code == 200
+    assert r.json()["divorced"] is True and r.json()["divorce_year"] == 1990
+
+
+def test_divorce_year_with_divorced_false_rejected(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    assert _marry(authed_client, tree_a, a, b, divorced=False, divorce_year=1990).status_code == 400
+    rel_id = _marry(authed_client, tree_a, a, b).json()["relationship_id"]
+    assert _patch_rel(authed_client, tree_a, rel_id, divorced=False, divorce_year=1990).status_code == 400
+
+
+def test_divorced_rejected_on_parent_of(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+
+    for extra in ({"divorced": True}, {"divorce_year": 1990}):
+        r = authed_client.post(
+            f"/api/trees/{tree_a}/relationships",
+            json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF", **extra},
+        )
+        assert r.status_code == 400
+    rel_id = authed_client.post(
+        f"/api/trees/{tree_a}/relationships",
+        json={"person_a_id": a, "person_b_id": b, "type": "PARENT_OF"},
+    ).json()["relationship_id"]
+    assert _patch_rel(authed_client, tree_a, rel_id, divorced=True).status_code == 400
+
+
+def test_old_marriage_without_property_reads_as_not_divorced(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+    # simulate an edge created before the field existed: no divorced property
+    run_query(
+        "MATCH (a:Person {id: $a}), (b:Person {id: $b}) "
+        "CREATE (a)-[:MARRIED_TO {id: $rid}]->(b)",
+        {"a": a, "b": b, "rid": "legacy-rel-" + a},
+    )
+
+    spouse = authed_client.get(f"/api/trees/{tree_a}/people/{a}/relatives").json()["spouses"][0]
+    assert spouse["divorced"] is False and spouse["divorce_year"] is None
+
+
+def test_patch_divorced_cross_tree_404(authed_client, tree_ids):
+    tree_a, tree_b = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+    rel_id = _marry(authed_client, tree_a, a, b).json()["relationship_id"]
+    assert _patch_rel(authed_client, tree_b, rel_id, divorced=True).status_code == 404
+
+
+def test_divorced_in_relatives_and_graph(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+    rel_id = _marry(authed_client, tree_a, a, b, marriage_year=1960).json()["relationship_id"]
+    _patch_rel(authed_client, tree_a, rel_id, divorce_year=1975)
+
+    spouse = authed_client.get(f"/api/trees/{tree_a}/people/{a}/relatives").json()["spouses"][0]
+    assert spouse["divorced"] is True and spouse["divorce_year"] == 1975
+
+    edge = authed_client.get(f"/api/trees/{tree_a}/graph").json()["edges"][0]
+    assert edge["type"] == "MARRIED_TO"
+    assert edge["divorced"] is True and edge["divorce_year"] == 1975
+    assert edge["marriage_year"] == 1960
+
+
 # --- Tree ownership & access (Task 1.11) --------------------------------
 
 def test_tree_routes_require_login(client):
