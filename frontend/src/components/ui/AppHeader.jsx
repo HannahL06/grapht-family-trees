@@ -1,5 +1,6 @@
 import { MoonIcon, SunIcon } from './icons'
 import NavTab from './NavTab'
+import UserMenu from './UserMenu'
 import { useTheme } from '../../theme'
 
 export default function AppHeader() {
@@ -13,6 +14,7 @@ export default function AppHeader() {
         <NavTab to="/trees">Trees</NavTab>
         <NavTab to="/members">Members</NavTab>
       </nav>
+      <UserMenu />
       <button
         type="button"
         onClick={toggle}

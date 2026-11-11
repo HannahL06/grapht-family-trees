@@ -156,21 +156,21 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 2.3 Login and Register pages + routing [ ]
+### 2.3 Login and Register pages + routing [x]
 **Agent brief:** Create `frontend/src/pages/LoginPage.jsx` and `RegisterPage.jsx`. Each should have a simple form (email + password fields, plus a name field on the register page, submit button) that calls the corresponding auth API function. On success, redirect to `/trees`. On error, show the error message. **Register must call `login(email, password)` immediately after a successful `register(...)`** (the register endpoint returns no tokens), then redirect to `/trees`. In `App.jsx`, set up React Router with routes: `/login` → LoginPage, `/register` → RegisterPage, `/trees` → placeholder "Trees page" div, `/` → redirect to `/login` (until the landing page exists, Task 2.10). **Add a small `ProtectedRoute` wrapper that redirects to `/login` when there is no `access_token` in localStorage, and wrap `/trees` (and later `/trees/:id`) in it** so a logged-out visit never shows a page that just fails with 401. Build both pages inside `AppShell` with the `ui/` components from Task 2.x. There are no mock-ups for them yet, so keep them simple and consistent with the tokens (a centered card on the page background); they will be restyled once designed. Also wire the header's user button to a small menu showing the user's name with a **Log out** action, so the login flow can be tested both ways.
 
 **Done when:** Can register a new user and land on `/trees` already logged in, and log in with that user from the login page. Visiting `/trees` while logged out redirects to `/login`. A wrong password shows an error on the login page instead of redirecting.
 
 ---
 
-### 2.4 Trees page [ ]
+### 2.4 Trees page [x]
 **Agent brief:** Create `frontend/src/pages/TreesPage.jsx` and `frontend/src/api/trees.js` (`getTrees()`, `createTree(name)`). Build the page from the Trees artboard using the `ui/` components inside `AppShell`: a "Trees" title and a responsive grid of cards. Each card shows a decorative graph thumbnail (a static SVG, rotated a different amount per card as in the mock-up), the tree name and "N members" (from `member_count`, Task 2.y), and links to `/trees/:id`. The last card is a dashed "New tree" card: clicking it reveals an inline name field and a create button that calls `POST /trees`, then refreshes the list. Both endpoints require login (the Task 2.2 client attaches the token). The `/trees/:id` page is Task 2.5, so the link lands on an empty route until then.
 
 **Done when:** The page matches the Trees artboard in both themes, shows only the logged-in user's trees with correct member counts, and creating a tree adds a card.
 
 ---
 
-### 2.5 Tree view page [ ]
+### 2.5 Tree view page [x]
 **Agent brief:** Create `frontend/src/pages/TreeView.jsx` for `/trees/:id`, from the tree-view artboard: inside `AppShell`, a 220px left pane and a canvas area (an empty placeholder until Task 2.7). Left pane: a Graph/Tree `PillToggle` (state only for now), a search control that expands inline into a field with a results list (calls `GET /trees/{tree_id}/people?search=`, debounced; choosing a result selects that person), "Add member", "Edit" and "Delete" actions (Edit and Delete disabled, with the tooltip "Select a person first", until someone is selected; they are wired in Task 2.6), and a "Relationship calculator" link at the bottom (inert until Task 4.3). Hold `selectedPersonId` in the page's state. When a person is selected, show the details card (top right of the canvas: name, Born, Birthplace, Married) filled from the people and relatives endpoints, with a close button; clicking empty canvas clears the selection. Show "Members" in the top bar's nav while a tree is open. Create `frontend/src/api/people.js` (`listPeople`, `getPerson`, `getRelatives`).
 
 **Done when:** `/trees/:id` loads the tree's name, search finds and selects a person, the details card shows their data including the marriage year, and Edit and Delete enable and disable with the selection, in both themes.

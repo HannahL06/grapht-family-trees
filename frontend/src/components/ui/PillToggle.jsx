@@ -1,15 +1,16 @@
-/** Segmented pill switch, e.g. Tree / Force layout. options: [{value, label}] */
-export default function PillToggle({ options, value, onChange }) {
+/** Segmented pill switch, e.g. Graph / Tree layout. options: [{value, label}] */
+export default function PillToggle({ options, value, onChange, compact = false, label }) {
+  const size = compact ? 'min-h-[30px] px-3 text-[13px]' : 'min-h-11 px-5'
   return (
-    <div role="group" className="inline-flex rounded-full bg-chrome p-1">
+    <div role="group" aria-label={label} className="inline-flex rounded-full bg-chrome p-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`min-h-11 cursor-pointer rounded-full px-5 font-medium ${
-            o.value === value ? 'bg-accent text-on-accent' : 'text-ink'
+          className={`${size} cursor-pointer rounded-full font-medium ${
+            o.value === value ? 'bg-accent font-bold text-on-accent' : 'text-ink'
           }`}
         >
           {o.label}
