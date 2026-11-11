@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { errorMessage } from '../api/auth'
 import {
   createPerson,
   deletePerson,
   getPerson,
   getRelatives,
-  updatePerson,
+  saveMemberEdit,
 } from '../api/people'
-import { createRelationship, updateMarriage } from '../api/relationships'
+import { createRelationship } from '../api/relationships'
 import { getGraph } from '../api/graph'
 import { getTree } from '../api/trees'
 import AddRelativeBar from '../components/AddRelativeBar'
@@ -23,11 +23,14 @@ const RELATIVE_LABEL = { parent: 'parent', spouse: 'spouse', child: 'child' }
 
 export default function TreeView() {
   const { id: treeId } = useParams()
+  // /trees/:id?selected=<personId> opens the tree with that person selected
+  // (the Member page's "Show in tree" link)
+  const [searchParams] = useSearchParams()
   const [tree, setTree] = useState(null)
   const [error, setError] = useState('')
   const [view, setView] = useState('graph') // 'graph' | 'tree'
   const [graphData, setGraphData] = useState(null)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(() => searchParams.get('selected'))
   const [cardOpen, setCardOpen] = useState(false) // details card, opened with "/"
   const [detail, setDetail] = useState(null)
   const [version, setVersion] = useState(0) // bump to reload the selected person
@@ -96,17 +99,7 @@ export default function TreeView() {
   }
 
   async function submitEdit(values) {
-    await updatePerson(treeId, selectedId, values.person)
-    for (const s of loaded.relatives.spouses) {
-      const now = values.marriages[s.relationship_id]
-      if (!now) continue
-      // send only what changed
-      const changes = {}
-      if (now.marriage_year !== (s.marriage_year ?? null)) changes.marriage_year = now.marriage_year
-      if (now.divorced !== Boolean(s.divorced)) changes.divorced = now.divorced
-      if (now.divorce_year !== (s.divorce_year ?? null)) changes.divorce_year = now.divorce_year
-      if (Object.keys(changes).length) await updateMarriage(treeId, s.relationship_id, changes)
-    }
+    await saveMemberEdit(treeId, selectedId, loaded.relatives.spouses, values)
     setVersion((v) => v + 1)
   }
 

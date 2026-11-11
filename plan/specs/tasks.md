@@ -205,14 +205,16 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 2.8 Members page [ ]
+### 2.8 Members page [x]
+**Done 2026-11-11.** `MembersPage.jsx` at `/trees/:id/members`. The header now shows the Members tab only while a tree is open (`AppHeader` reads the tree id from the URL; `NavTab` takes an `active` override so Trees and Members are never both highlighted). The old `/members` placeholder is gone. The table shows the first 200 rows with a "Showing the first 200 of N" note; the people endpoint is not paginated yet, so very large trees will want server-side paging later. The member rows link to `/trees/:id/members/:personId`, which is a placeholder until Task 2.9.
 **Agent brief:** Create `frontend/src/pages/MembersPage.jsx` for `/trees/:id/members`, from the Members artboard: a "Members" title, a search field (calls `GET /trees/{tree_id}/people?search=`, debounced) and a table with columns Name, Born, Birthplace and Married (`marriage_years` from Task 2.y; all years comma-separated, "—" if none). Each row links to `/trees/:id/members/:personId`. The table scrolls sideways on narrow screens.
 
 **Done when:** The page lists the current tree's people only, search filters them, rows link to the member page, and it matches the artboard in both themes.
 
 ---
 
-### 2.9 Member page [ ]
+### 2.9 Member page [x]
+**Done 2026-11-11.** `MemberPage.jsx` at `/trees/:id/members/:personId`: details (Born, Died when set, Birthplace, Married, Notes when set), family links (Parents, Spouse or Spouses with "married / divorced" notes, current spouse first, Children), "Show in tree" (`/trees/:id?selected=<id>`, which `TreeView` now reads) and an edit pencil using the same dialog as the tree view. The shared "save an edit" logic moved to `saveMemberEdit` in `api/people.js`, used by both pages.
 **Agent brief:** Create `frontend/src/pages/MemberPage.jsx` for `/trees/:id/members/:personId`, from the Member artboard: a "← All members" link, the member's name (Fraunces, large) with the tree name beneath, a "Show in tree" link (to `/trees/:id?selected={personId}`; TreeView selects that person on load) and an edit pencil (opens the edit form from Task 2.6). Two columns: Details (Born, Birthplace, Married; also Died and Notes when present) and Family (Parents, Spouse with the marriage year, Children, each name linking to that member's page) from `GET .../relatives` (Task 2.y). Add the `?selected=` handling to TreeView.
 
 **Done when:** A member page shows correct details and working family links, "Show in tree" opens the tree with that person selected, and it matches the artboard in both themes.
