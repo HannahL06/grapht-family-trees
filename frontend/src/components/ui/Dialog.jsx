@@ -19,7 +19,7 @@ export default function Dialog({ title, onClose, children }) {
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
       aria-label={title}
-      className="m-auto w-full max-w-md rounded-2xl border-2 border-rule bg-card p-0 text-ink backdrop:bg-black/40"
+      className="m-auto max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border-2 border-rule bg-card p-0 text-ink backdrop:bg-black/40"
     >
       <div className="p-6">
         <h2 className="mb-5 font-display text-2xl font-semibold">{title}</h2>

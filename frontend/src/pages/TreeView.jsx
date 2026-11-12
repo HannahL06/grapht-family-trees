@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { errorMessage } from '../api/auth'
+import { getGraph } from '../api/graph'
 import {
   createPerson,
   deletePerson,
@@ -9,14 +10,12 @@ import {
   saveMemberEdit,
 } from '../api/people'
 import { createRelationship } from '../api/relationships'
-import { getGraph } from '../api/graph'
 import { getTree } from '../api/trees'
-import AddRelativeBar from '../components/AddRelativeBar'
 import ConfirmDeleteDialog from '../components/ConfirmDeleteDialog'
 import MemberCard from '../components/MemberCard'
 import MemberFormDialog from '../components/MemberFormDialog'
 import TreeGraph from '../components/TreeGraph'
-import TreeSidebar from '../components/TreeSidebar'
+import TreeToolbar from '../components/TreeToolbar'
 import { AppShell } from '../components/ui'
 
 const RELATIVE_LABEL = { parent: 'parent', spouse: 'spouse', child: 'child' }
@@ -31,10 +30,8 @@ export default function TreeView() {
   const [view, setView] = useState('graph') // 'graph' | 'tree'
   const [graphData, setGraphData] = useState(null)
   const [selectedId, setSelectedId] = useState(() => searchParams.get('selected'))
-  const [cardOpen, setCardOpen] = useState(false) // details card, opened with "/"
   const [detail, setDetail] = useState(null)
-  const [version, setVersion] = useState(0) // bump to reload the selected person
-  const [adding, setAdding] = useState(false) // "Add to X" bar open
+  const [version, setVersion] = useState(0) // bump to reload the tree and the selected person
   // Which dialog is open: null | {type:'add'} | {type:'edit'} | {type:'delete'}
   // | {type:'relative', kind:'parent'|'spouse'|'child'}
   const [dialog, setDialog] = useState(null)
@@ -71,20 +68,12 @@ export default function TreeView() {
     }
   }, [treeId, selectedId, version])
 
-  // Selected person's data, available once loaded (Edit/Delete use it)
+  // The selected person's data, once loaded (the card and the dialogs use it)
   const loaded = selectedId && detail?.person.id === selectedId ? detail : null
-  // The details card only shows after "/" is pressed
-  const card = cardOpen ? loaded : null
-
-  function select(id) {
-    setSelectedId(id)
-    setCardOpen(false)
-    setAdding(false)
-  }
 
   function changeView(next) {
     setView(next)
-    select(null)
+    setSelectedId(null)
   }
 
   function closeDialog() {
@@ -94,7 +83,7 @@ export default function TreeView() {
 
   async function submitAdd(values) {
     const person = await createPerson(treeId, values.person)
-    select(person.id)
+    setSelectedId(person.id)
     setVersion((v) => v + 1)
   }
 
@@ -119,13 +108,12 @@ export default function TreeView() {
       throw err
     }
     createdRef.current = null
-    setAdding(false)
     setVersion((v) => v + 1)
   }
 
   async function confirmDelete() {
     await deletePerson(treeId, selectedId)
-    select(null)
+    setSelectedId(null)
     setDetail(null)
     setVersion((v) => v + 1)
   }
@@ -138,49 +126,35 @@ export default function TreeView() {
     )
   }
 
+  const toolbar = (
+    <TreeToolbar
+      treeId={treeId}
+      treeName={tree?.name ?? ''}
+      view={view}
+      onViewChange={changeView}
+      onPick={setSelectedId}
+      onAddMember={() => setDialog({ type: 'add' })}
+    />
+  )
+
   return (
-    <AppShell fill>
-      <TreeSidebar
-        treeId={treeId}
-        treeName={tree?.name ?? ''}
-        view={view}
-        onViewChange={changeView}
-        hasSelection={Boolean(selectedId)}
-        onPick={select}
-        onAdd={() => setDialog({ type: 'add' })}
-        onEdit={() => loaded && setDialog({ type: 'edit' })}
-        onDelete={() => loaded && setDialog({ type: 'delete' })}
-      />
-      {/* Clicking a person selects them; clicking empty canvas clears the
-          selection (both handled inside TreeGraph). */}
-      <main className="relative min-h-[520px] min-w-0 flex-[999_1_560px] overflow-hidden bg-canvas">
-        <TreeGraph
-          data={graphData}
-          view={view}
-          selectedId={selectedId}
-          onSelect={select}
-          onOpenDetails={() => {
-            setCardOpen(true)
-            setAdding(false)
-          }}
-          onAddRelative={() => {
-            setAdding(true)
-            setCardOpen(false)
-          }}
-        />
-        {card && (
-          <MemberCard
-            person={card.person}
-            relatives={card.relatives}
-            onClose={() => setCardOpen(false)}
-          />
-        )}
-        {loaded && adding && (
-          <AddRelativeBar
-            name={loaded.person.name}
-            onChoose={(kind) => setDialog({ type: 'relative', kind })}
-            onClose={() => setAdding(false)}
-          />
+    <AppShell fill toolbar={toolbar}>
+      {/* Clicking a person selects them and pops their card up beside them;
+          clicking empty canvas clears the selection (handled in TreeGraph). */}
+      <main className="relative min-h-[300px] min-w-0 flex-[999_1_560px] overflow-hidden bg-canvas">
+        <TreeGraph data={graphData} view={view} selectedId={selectedId} onSelect={setSelectedId}>
+          {loaded && (
+            <MemberCard
+              person={loaded.person}
+              relatives={loaded.relatives}
+              onEdit={() => setDialog({ type: 'edit' })}
+            />
+          )}
+        </TreeGraph>
+        {graphData && graphData.nodes.length === 0 && (
+          <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-lg text-muted">
+            This tree is empty. Use “Add member” in the top bar to add the first person.
+          </p>
         )}
       </main>
 
@@ -198,6 +172,8 @@ export default function TreeView() {
           person={loaded.person}
           spouses={loaded.relatives.spouses}
           onSubmit={submitEdit}
+          onAddRelative={(kind) => setDialog({ type: 'relative', kind })}
+          onDelete={() => setDialog({ type: 'delete' })}
           onClose={closeDialog}
         />
       )}

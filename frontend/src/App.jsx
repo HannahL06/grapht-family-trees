@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import MemberPage from './pages/MemberPage'
 import MembersPage from './pages/MembersPage'
 import RegisterPage from './pages/RegisterPage'
+import SettingsPage from './pages/SettingsPage'
 import Styleguide from './pages/Styleguide'
 import TreesPage from './pages/TreesPage'
 import TreeView from './pages/TreeView'
@@ -22,6 +23,7 @@ function App() {
         <Route path="/trees/:id" element={protectedPage(<TreeView />)} />
         <Route path="/trees/:id/members" element={protectedPage(<MembersPage />)} />
         <Route path="/trees/:id/members/:personId" element={protectedPage(<MemberPage />)} />
+        <Route path="/settings" element={protectedPage(<SettingsPage />)} />
         <Route path="/styleguide" element={<Styleguide />} />
         {/* anything unknown goes to the landing page */}
         <Route path="*" element={<Navigate to="/" replace />} />

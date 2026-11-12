@@ -52,6 +52,8 @@ function MarriageFields({ title, value, onChange }) {
  *  - person:          pre-fill values (edit mode)
  *  - spouses:         edit mode only; one marriage-year field per spouse
  *  - askMarriageYear: spouse mode; one optional marriage-year field
+ *  - onAddRelative(kind) / onDelete: edit mode; show "Add a relative" buttons
+ *    and a Delete link (the caller swaps this dialog for the next one)
  *  - onSubmit(values) must throw on failure; the form shows the message and
  *    stays open. An error with `userMessage` is shown as written.
  */
@@ -61,6 +63,8 @@ export default function MemberFormDialog({
   person,
   spouses = [],
   askMarriageYear = false,
+  onAddRelative,
+  onDelete,
   onSubmit,
   onClose,
 }) {
@@ -148,6 +152,33 @@ export default function MemberFormDialog({
             onChange={(m) => setMarriages((all) => ({ ...all, [s.relationship_id]: m }))}
           />
         ))}
+
+        {/* Edit mode only: add a relative, or delete this person */}
+        {(onAddRelative || onDelete) && (
+          <div className="grid gap-4 border-t-2 border-rule pt-4">
+            {onAddRelative && (
+              <div>
+                <div className="mb-2 font-medium">Add a relative</div>
+                <div className="flex flex-wrap gap-2">
+                  {['parent', 'spouse', 'child'].map((kind) => (
+                    <Button key={kind} variant="soft" onClick={() => onAddRelative(kind)}>
+                      + {kind[0].toUpperCase() + kind.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="cursor-pointer self-start bg-transparent p-0 text-accent underline-offset-4 hover:underline"
+              >
+                Delete {form.name.trim() || 'this person'}…
+              </button>
+            )}
+          </div>
+        )}
 
         {error && <p role="alert">{error}</p>}
         <div className="flex justify-end gap-2">

@@ -26,7 +26,7 @@ export function useTheme() {
   }, [theme])
 
   const toggle = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
-  return { theme, toggle }
+  return { theme, setTheme, toggle }
 }
 
 /** Read token values for the Sigma canvas, which can't use CSS classes. */

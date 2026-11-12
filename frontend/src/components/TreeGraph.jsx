@@ -6,7 +6,6 @@ import { useEffect, useRef } from 'react'
 import { applyTheme, buildGraph, readPositions } from '../graph/build'
 import { applyTreeLayout, startForceLayout } from '../graph/layouts'
 import { useTokens } from '../theme'
-import { PlusIcon } from './ui'
 
 const CLEAR = 'rgba(0,0,0,0)'
 
@@ -32,16 +31,21 @@ function applyHighlight(sigma, id, highlightedRef) {
   }
 }
 
+const CARD_GAP = 14 // space between the node's ring and the card
+const EDGE_MARGIN = 8 // the card never gets closer than this to the canvas edge
+
 /**
- * Put the selection ring and the "/" and "+" buttons on the selected node.
- * They are plain HTML on top of the canvas, repositioned after every render
- * so they follow panning, zooming and layout movement.
+ * Put the selection ring on the selected node, and the pop-up card right
+ * beside it. Both are plain HTML on top of the canvas, repositioned after
+ * every render so they follow panning, zooming and layout movement. The card
+ * goes to the right of the node, flips to the left near the right edge, and
+ * is kept inside the canvas.
  */
-function placeOverlay(sigma, { buttons, ring }, id) {
-  if (!sigma || !buttons || !ring) return
+function placeOverlay(sigma, { card, ring }, id) {
+  if (!sigma || !card || !ring) return
   const graph = sigma.getGraph()
   if (!id || !graph.hasNode(id)) {
-    buttons.style.display = 'none'
+    card.style.display = 'none'
     ring.style.display = 'none'
     return
   }
@@ -51,26 +55,21 @@ function placeOverlay(sigma, { buttons, ring }, id) {
   ring.style.display = 'block'
   ring.style.width = ring.style.height = `${radius * 2}px`
   ring.style.transform = `translate(${p.x - radius}px, ${p.y - radius}px)`
-  buttons.style.display = 'flex'
-  // to the left of the node so they never cover its name (shown on the right)
-  buttons.style.transform = `translate(${p.x - radius - 36}px, ${p.y - 30}px)`
-}
 
-function OverlayButton({ label, onClick, children }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-      className="pointer-events-auto flex size-[26px] cursor-pointer items-center justify-center rounded-full border-2 border-rule bg-card text-accent"
-    >
-      {children}
-    </button>
-  )
+  // the card exists only once the person's data has loaded
+  if (!card.firstElementChild) {
+    card.style.display = 'none'
+    return
+  }
+  card.style.display = 'block'
+  const { width, height } = sigma.getDimensions()
+  const w = card.offsetWidth
+  const h = card.offsetHeight
+  let x = p.x + radius + CARD_GAP
+  if (x + w > width - EDGE_MARGIN) x = p.x - radius - CARD_GAP - w // flip to the left
+  x = Math.max(EDGE_MARGIN, Math.min(x, width - w - EDGE_MARGIN))
+  const y = Math.max(EDGE_MARGIN, Math.min(p.y - 28, height - h - EDGE_MARGIN))
+  card.style.transform = `translate(${x}px, ${y}px)`
 }
 
 /**
@@ -79,16 +78,9 @@ function OverlayButton({ label, onClick, children }) {
  *  - data: { nodes, edges } from GET /trees/{id}/graph
  *  - view: 'graph' (force layout) | 'tree' (generations)
  */
-export default function TreeGraph({
-  data,
-  view,
-  selectedId,
-  onSelect,
-  onOpenDetails,
-  onAddRelative,
-}) {
+export default function TreeGraph({ data, view, selectedId, onSelect, children }) {
   const containerRef = useRef(null)
-  const overlayRef = useRef(null)
+  const cardRef = useRef(null)
   const ringRef = useRef(null)
   const sigmaRef = useRef(null)
   const highlightedRef = useRef(null)
@@ -107,7 +99,7 @@ export default function TreeGraph({
   // Create Sigma once.
   useEffect(() => {
     const tokensNow = () => tokensRef.current
-    const overlayRefs = () => ({ buttons: overlayRef.current, ring: ringRef.current })
+    const overlayRefs = () => ({ card: cardRef.current, ring: ringRef.current })
     const sigma = new Sigma(new Graph(), containerRef.current, {
       primitives: {
         nodes: {
@@ -180,6 +172,7 @@ export default function TreeGraph({
     sigma.on('clickNode', ({ node }) => onSelectRef.current(node))
     sigma.on('clickStage', () => onSelectRef.current(null))
     sigma.on('afterRender', () => placeOverlay(sigma, overlayRefs(), selectedRef.current))
+    // (selection is cleared by clicking empty canvas; clicks on the card never reach Sigma)
     sigmaRef.current = sigma
     if (import.meta.env.DEV) window.__sigma = sigma // for debugging in the browser console
 
@@ -250,13 +243,21 @@ export default function TreeGraph({
     sigma.refresh()
   }, [tokens])
 
-  // Selection changed: ring, overlay buttons, and scroll into view if needed.
+  // The card's size changes when its content loads, so re-place it after every render.
+  useEffect(() => {
+    placeOverlay(
+      sigmaRef.current,
+      { card: cardRef.current, ring: ringRef.current },
+      selectedRef.current,
+    )
+  })
+
+  // Selection changed: ring, card, and scroll into view if needed.
   useEffect(() => {
     selectedRef.current = selectedId
     const sigma = sigmaRef.current
     if (!sigma) return
     applyHighlight(sigma, selectedId, highlightedRef)
-    placeOverlay(sigma, { buttons: overlayRef.current, ring: ringRef.current }, selectedId)
 
     const graph = sigma.getGraph()
     if (selectedId && graph.hasNode(selectedId)) {
@@ -279,25 +280,14 @@ export default function TreeGraph({
         style={{ display: 'none' }}
         className="pointer-events-none absolute top-0 left-0 rounded-full border-[2.5px] border-ink"
       />
+      {/* the pop-up card for the selected person (passed in as children); it
+          sits above the canvas and any nodes under it */}
       <div
-        ref={overlayRef}
+        ref={cardRef}
         style={{ display: 'none' }}
-        className="pointer-events-none absolute top-0 left-0 flex-col gap-1.5"
+        className="absolute top-0 left-0 z-10"
       >
-        <OverlayButton label="Show member details" onClick={onOpenDetails}>
-          <svg width="14" height="14" viewBox="-8 -8 16 16" aria-hidden="true">
-            <path
-              d="M-4 5 L4 -5"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-        </OverlayButton>
-        <OverlayButton label="Add a related person" onClick={onAddRelative}>
-          <PlusIcon size={14} strokeWidth={2.6} />
-        </OverlayButton>
+        {children}
       </div>
     </div>
   )
