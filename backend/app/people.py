@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -18,8 +19,13 @@ def ensure_person_indexes() -> None:
     run_query("CREATE INDEX person_tree_id_index IF NOT EXISTS FOR (p:Person) ON (p.tree_id)")
 
 
+# Optional; anything else is rejected with a 422 before it reaches the database.
+Gender = Literal["male", "female"]
+
+
 class PersonCreate(BaseModel):
     name: str
+    gender: Gender | None = None
     birth_year: int | None = None
     death_year: int | None = None
     birth_place: str | None = None
@@ -28,6 +34,7 @@ class PersonCreate(BaseModel):
 
 class PersonUpdate(BaseModel):
     name: str | None = None
+    gender: Gender | None = None  # null clears it
     birth_year: int | None = None
     death_year: int | None = None
     birth_place: str | None = None
@@ -38,6 +45,7 @@ class PersonResponse(BaseModel):
     id: str
     tree_id: str
     name: str
+    gender: Gender | None = None
     birth_year: int | None = None
     death_year: int | None = None
     birth_place: str | None = None
@@ -50,13 +58,14 @@ def create_person_in_tree(tree_id: str, body: PersonCreate):
         "id": str(uuid.uuid4()),
         "tree_id": tree_id,
         "name": body.name,
+        "gender": body.gender,
         "birth_year": body.birth_year,
         "death_year": body.death_year,
         "birth_place": body.birth_place,
         "notes": body.notes,
     }
     run_query(
-        "CREATE (p:Person {id: $id, tree_id: $tree_id, name: $name, "
+        "CREATE (p:Person {id: $id, tree_id: $tree_id, name: $name, gender: $gender, "
         "birth_year: $birth_year, death_year: $death_year, "
         "birth_place: $birth_place, notes: $notes})",
         person,
@@ -78,7 +87,7 @@ def list_people_in_tree(tree_id: str, search: str | None = None):
         "WHERE $search IS NULL OR toLower(p.name) CONTAINS toLower($search) "
         "OPTIONAL MATCH (p)-[m:MARRIED_TO]-(:Person {tree_id: $tree_id}) "
         "WITH p, [y IN collect(m.marriage_year) WHERE y IS NOT NULL] AS marriage_years "
-        "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, "
+        "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, p.gender AS gender, "
         "p.birth_year AS birth_year, p.death_year AS death_year, "
         "p.birth_place AS birth_place, p.notes AS notes, "
         "marriage_years "
@@ -136,7 +145,7 @@ def get_relatives(tree_id: str, person_id: str):
 def get_person_in_tree(tree_id: str, person_id: str):
     rows = run_query(
         "MATCH (p:Person {id: $person_id, tree_id: $tree_id}) "
-        "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, "
+        "RETURN p.id AS id, p.tree_id AS tree_id, p.name AS name, p.gender AS gender, "
         "p.birth_year AS birth_year, p.death_year AS death_year, "
         "p.birth_place AS birth_place, p.notes AS notes",
         {"person_id": person_id, "tree_id": tree_id},

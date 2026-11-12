@@ -7,6 +7,37 @@ const toText = (v) => (v.trim() === '' ? null : v.trim())
 
 const emptyMarriage = { year: '', divorced: false, divorceYear: '' }
 
+/** Male / Female, optional: pressing the chosen one again clears it. */
+function GenderField({ value, onChange }) {
+  return (
+    <div role="group" aria-labelledby="gender-label">
+      <div id="gender-label" className="mb-1 font-medium">
+        Gender
+      </div>
+      <div className="flex gap-2">
+        {[
+          ['male', 'Male'],
+          ['female', 'Female'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={value === key}
+            onClick={() => onChange(value === key ? '' : key)}
+            className={`min-h-11 flex-1 cursor-pointer rounded-xl border-2 px-4 font-medium ${
+              value === key
+                ? 'border-accent bg-accent text-on-accent'
+                : 'border-rule bg-page text-ink hover:bg-hover'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Form state -> API shape. A divorce year only counts while divorced is ticked.
 const toMarriage = (m) => ({
   marriage_year: toInt(m.year),
@@ -70,6 +101,7 @@ export default function MemberFormDialog({
 }) {
   const [form, setForm] = useState({
     name: person?.name ?? '',
+    gender: person?.gender ?? '', // '' | 'male' | 'female'
     birth_year: person?.birth_year ?? '',
     death_year: person?.death_year ?? '',
     birth_place: person?.birth_place ?? '',
@@ -103,6 +135,7 @@ export default function MemberFormDialog({
       await onSubmit({
         person: {
           name: form.name.trim(),
+          gender: form.gender || null,
           birth_year: toInt(form.birth_year),
           death_year: toInt(form.death_year),
           birth_place: toText(String(form.birth_place)),
@@ -124,6 +157,10 @@ export default function MemberFormDialog({
     <Dialog title={title} onClose={onClose}>
       <form onSubmit={handleSubmit} className="grid gap-4">
         <TextField label="Name" required autoFocus value={form.name} onChange={set('name')} />
+        <GenderField
+          value={form.gender}
+          onChange={(gender) => setForm((f) => ({ ...f, gender }))}
+        />
         <div className="grid grid-cols-2 gap-4">
           <TextField
             label="Born (year)"

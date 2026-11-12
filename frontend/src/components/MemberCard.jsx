@@ -10,6 +10,7 @@ export default function MemberCard({ person, relatives, onEdit }) {
     .filter((y) => y != null)
     .sort((a, b) => a - b)
   const facts = [
+    ...(person.gender ? [['Gender', person.gender === 'male' ? 'Male' : 'Female']] : []),
     ['Born', person.birth_year ?? '—'],
     ...(person.death_year != null ? [['Died', person.death_year]] : []),
     ['Birthplace', person.birth_place || '—'],

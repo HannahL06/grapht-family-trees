@@ -12,6 +12,17 @@ from app.core.dependencies import require_tree_access
 router = APIRouter(dependencies=[Depends(require_tree_access)])
 
 
+def ensure_relationship_ids() -> None:
+    """Call once at app startup. Every relationship needs a UUID `id` (the API
+    returns it and uses it to edit/delete). Data created before that rule
+    (e.g. an old seed run) has none, which made some API calls fail with a 500.
+    This gives any relationship without one an id; it is a no-op otherwise."""
+    run_query(
+        "MATCH (:Person)-[r:PARENT_OF|MARRIED_TO]->(:Person) WHERE r.id IS NULL "
+        "SET r.id = randomUUID()"
+    )
+
+
 class RelationshipType(str, Enum):
     PARENT_OF = "PARENT_OF"
     MARRIED_TO = "MARRIED_TO"

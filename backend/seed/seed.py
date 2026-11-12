@@ -83,10 +83,17 @@ def main() -> None:
         (noah, wendy), (rose, wendy),
     ]
     run_query(
+        # every relationship gets its own UUID `id` (the API needs it)
         "UNWIND $pairs AS pair "
         "MATCH (parent:Person {id: pair.parent_id}), (child:Person {id: pair.child_id}) "
-        "MERGE (parent)-[:PARENT_OF]->(child)",
-        {"pairs": [{"parent_id": p["id"], "child_id": c["id"]} for p, c in parent_of_pairs]},
+        "MERGE (parent)-[r:PARENT_OF]->(child) "
+        "ON CREATE SET r.id = pair.rid",
+        {
+            "pairs": [
+                {"parent_id": p["id"], "child_id": c["id"], "rid": str(uuid.uuid4())}
+                for p, c in parent_of_pairs
+            ]
+        },
     )
 
     married_pairs = [
@@ -102,8 +109,14 @@ def main() -> None:
     run_query(
         "UNWIND $pairs AS pair "
         "MATCH (a:Person {id: pair.a_id}), (b:Person {id: pair.b_id}) "
-        "MERGE (a)-[:MARRIED_TO]->(b)",
-        {"pairs": [{"a_id": a["id"], "b_id": b["id"]} for a, b in married_pairs]},
+        "MERGE (a)-[r:MARRIED_TO]->(b) "
+        "ON CREATE SET r.id = pair.rid, r.divorced = false",
+        {
+            "pairs": [
+                {"a_id": a["id"], "b_id": b["id"], "rid": str(uuid.uuid4())}
+                for a, b in married_pairs
+            ]
+        },
     )
 
     [node_count] = run_query(

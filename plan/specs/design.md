@@ -9,7 +9,7 @@ Consolidated technical decisions. See `steering/tech.md` for the full stack and 
 Neo4j has no fixed schema: labels, properties and relationship types exist by convention. Only constraints and indexes are enforced by the database (created by `core/schema.py`). Everything lives in Neo4j, including users (one datastore, nothing lost on redeploys). No `Family` node: pure person-to-person edges.
 
 ### Person
-- Properties: `id` (UUID), `tree_id`, `name`, `birth_year` (optional), `death_year` (optional), `birth_place` (optional), `notes` (optional)
+- Properties: `id` (UUID), `tree_id`, `name`, `gender` (optional: `"male"` or `"female"`, added 2026-11-12; anything else is a 422), `birth_year` (optional), `death_year` (optional), `birth_place` (optional), `notes` (optional)
 - Constraints: `id` unique; index on `tree_id`
 - Belongs to exactly one tree (via `tree_id`); no edge ever crosses trees
 - Extra fields (gender, full dates, Hebrew birthday, yahrzeit, places lived) are deferred (Task 6.3)
