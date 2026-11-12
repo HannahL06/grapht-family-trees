@@ -221,7 +221,8 @@ Create a second AuraDB Free instance to use as a staging/practice environment, s
 
 ---
 
-### 2.10 Landing page [ ]
+### 2.10 Landing page [x]
+**Done 2026-11-11.** `LandingPage.jsx` at `/`, from the Landing artboard using only app tokens (the band is `bg-band`, nodes `node-a`/`node-b`, edges `edge`); the headline is Cormorant Garamond 500 scaling with the viewport, the logo Cormorant 600. "Get started" goes to `/register`, or to `/trees` when logged in. "How it works" and "Contact" scroll to short placeholder sections. Unknown URLs now redirect to `/`. I added a light/dark toggle to the landing header (not in the mock-up) so the page can leave dark mode as well as enter it. **This finishes Phase 2.**
 **Agent brief:** Create `frontend/src/pages/LandingPage.jsx` for `/`, from the Landing artboard: a header (logo, "How it works", "Contact", and a "Get started" button to `/register`, or to `/trees` when already logged in), a very large "See your whole family." headline (Cormorant Garamond, scaling with the viewport) and a band with the graph illustration (a static SVG). Use only the app's tokens, with no separate landing palette (decided; see `design.md`): `page` background, `ink` text, an `accent` button, and the band in `chrome` with `node-a`/`node-b` nodes and `edge` lines, so dark mode works with no extra code. "How it works" and "Contact" can scroll to placeholder sections for now. Change the `/` route to render this page.
 
 **Done when:** `/` shows the landing page in both themes and "Get started" works for logged-out and logged-in visitors.

@@ -1,5 +1,6 @@
-import { matchPath, useLocation } from 'react-router-dom'
+import { Link, matchPath, useLocation } from 'react-router-dom'
 import { MoonIcon, SunIcon } from './icons'
+import Logo from './Logo'
 import NavTab from './NavTab'
 import UserMenu from './UserMenu'
 import { useTheme } from '../../theme'
@@ -13,9 +14,9 @@ export default function AppHeader() {
 
   return (
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-rule px-7 py-3">
-      <div className="rounded-2xl bg-chrome px-6 py-3 font-display text-[22px] font-semibold">
-        grapht
-      </div>
+      <Link to="/trees" aria-label="Grapht, your trees" className="flex items-center">
+        <Logo className="h-14" />
+      </Link>
       <nav className="ml-5 flex flex-1 flex-wrap gap-1">
         <NavTab to="/trees" active={pathname.startsWith('/trees') && !onMembers}>
           Trees
