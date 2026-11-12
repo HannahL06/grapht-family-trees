@@ -626,6 +626,66 @@ def test_divorced_in_relatives_and_graph(authed_client, tree_ids):
     assert edge["marriage_year"] == 1960
 
 
+# --- Gender ---------------------------------------------------------------
+
+def test_gender_is_optional_and_round_trips(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+
+    # not given: stays null
+    pid = authed_client.post(f"/api/trees/{tree_a}/people", json={"name": "NoGender"}).json()["id"]
+    assert authed_client.get(f"/api/trees/{tree_a}/people/{pid}").json()["gender"] is None
+
+    # given on create, returned by create, get and list
+    r = authed_client.post(f"/api/trees/{tree_a}/people", json={"name": "Ann", "gender": "female"})
+    assert r.status_code == 200 and r.json()["gender"] == "female"
+    ann = r.json()["id"]
+    assert authed_client.get(f"/api/trees/{tree_a}/people/{ann}").json()["gender"] == "female"
+    listed = {p["name"]: p["gender"] for p in authed_client.get(f"/api/trees/{tree_a}/people").json()}
+    assert listed == {"NoGender": None, "Ann": "female"}
+
+    # change it, then clear it; other fields are untouched
+    r = authed_client.patch(f"/api/trees/{tree_a}/people/{ann}", json={"gender": "male"})
+    assert r.json()["gender"] == "male" and r.json()["name"] == "Ann"
+    r = authed_client.patch(f"/api/trees/{tree_a}/people/{ann}", json={"gender": None})
+    assert r.json()["gender"] is None
+    r = authed_client.patch(f"/api/trees/{tree_a}/people/{ann}", json={"birth_year": 1990})
+    assert r.json()["birth_year"] == 1990
+
+
+def test_invalid_gender_rejected(authed_client, tree_ids):
+    tree_a, _ = tree_ids
+    r = authed_client.post(f"/api/trees/{tree_a}/people", json={"name": "X", "gender": "robot"})
+    assert r.status_code == 422
+    pid = _add_person(authed_client, tree_a, "Y")
+    r = authed_client.patch(f"/api/trees/{tree_a}/people/{pid}", json={"gender": "Male"})
+    assert r.status_code == 422  # exact lowercase values only
+
+
+# --- Legacy relationships without an id ----------------------------------
+
+def test_relationships_without_id_get_one_and_relatives_works(authed_client, tree_ids):
+    """Data from before relationships had ids (an old seed run) made
+    /relatives fail with a 500, so the person card never appeared."""
+    from app.relationships import ensure_relationship_ids
+
+    tree_a, _ = tree_ids
+    a = _add_person(authed_client, tree_a, "A")
+    b = _add_person(authed_client, tree_a, "B")
+    c = _add_person(authed_client, tree_a, "C")
+    run_query(
+        "MATCH (a:Person {id: $a}), (b:Person {id: $b}), (c:Person {id: $c}) "
+        "CREATE (a)-[:MARRIED_TO]->(b), (a)-[:PARENT_OF]->(c)",
+        {"a": a, "b": b, "c": c},
+    )
+
+    ensure_relationship_ids()
+
+    r = authed_client.get(f"/api/trees/{tree_a}/people/{a}/relatives")
+    assert r.status_code == 200
+    assert r.json()["spouses"][0]["relationship_id"]
+    assert [p["name"] for p in r.json()["children"]] == ["C"]
+
+
 # --- Tree ownership & access (Task 1.11) --------------------------------
 
 def test_tree_routes_require_login(client):

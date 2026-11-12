@@ -131,6 +131,9 @@ export default function MemberPage() {
           <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] gap-x-20 gap-y-12">
             <section>
               <h2 className={sectionTitle}>Details</h2>
+              {person.gender && (
+                <Fact label="Gender">{person.gender === 'male' ? 'Male' : 'Female'}</Fact>
+              )}
               <Fact label="Born">{person.birth_year ?? '—'}</Fact>
               {person.death_year != null && <Fact label="Died">{person.death_year}</Fact>}
               <Fact label="Birthplace">{person.birth_place || '—'}</Fact>

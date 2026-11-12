@@ -10,6 +10,7 @@ from app.auth import router as auth_router
 from app.demo.routes import router as demo_router
 from app.people import ensure_person_indexes
 from app.people import router as people_router
+from app.relationships import ensure_relationship_ids
 from app.relationships import router as relationships_router
 from app.trees import router as trees_router
 
@@ -18,6 +19,7 @@ from app.trees import router as trees_router
 async def lifespan(app: FastAPI):
     ensure_person_indexes()
     ensure_user_constraints()
+    ensure_relationship_ids()
     yield
     close_driver()
 

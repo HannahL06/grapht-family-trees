@@ -212,6 +212,14 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
     )
     applyTheme(graph, tokensRef.current)
     sigma.setGraph(graph)
+    // A graph of one person has a zero-size bounding box, which Sigma cannot map
+    // to the screen: the node is drawn but cannot be clicked. Give it some room.
+    if (graph.order === 1) {
+      const { x, y } = graph.getNodeAttributes(graph.nodes()[0])
+      sigma.setCustomBBox({ x: [x - 50, x + 50], y: [y - 50, y + 50] })
+    } else {
+      sigma.setCustomBBox(null)
+    }
     sigma.setSetting('labelRenderedSizeThreshold', view === 'tree' ? 0 : GRAPH_LABEL_THRESHOLD)
     // tree view names everyone, so allow more labels (one per small grid cell)
     sigma.setSetting('labelGridCellSize', view === 'tree' ? 40 : 100)
