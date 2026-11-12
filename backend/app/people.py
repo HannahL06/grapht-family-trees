@@ -97,6 +97,8 @@ class RelativeRef(BaseModel):
 
 class SpouseRef(RelativeRef):
     marriage_year: int | None = None
+    divorced: bool = False
+    divorce_year: int | None = None
     relationship_id: str
 
 
@@ -123,6 +125,7 @@ def get_relatives(tree_id: str, person_id: str):
     spouses = run_query(
         "MATCH (:Person {id: $person_id, tree_id: $tree_id})-[r:MARRIED_TO]-(x:Person {tree_id: $tree_id}) "
         "RETURN x.id AS id, x.name AS name, r.marriage_year AS marriage_year, "
+        "coalesce(r.divorced, false) AS divorced, r.divorce_year AS divorce_year, "
         "r.id AS relationship_id ORDER BY x.name",
         params,
     )

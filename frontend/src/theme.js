@@ -26,7 +26,7 @@ export function useTheme() {
   }, [theme])
 
   const toggle = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
-  return { theme, toggle }
+  return { theme, setTheme, toggle }
 }
 
 /** Read token values for the Sigma canvas, which can't use CSS classes. */
@@ -40,6 +40,20 @@ export function readTokens() {
     lineB: get('--line-b'),
     edge: get('--edge'),
     ink: get('--ink'),
+    muted: get('--muted'),
     page: get('--page'),
+    card: get('--card'),
+    canvas: get('--canvas'),
   }
+}
+
+/** Current token values, re-read whenever the theme (data-theme on <html>) changes. */
+export function useTokens() {
+  const [tokens, setTokens] = useState(readTokens)
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTokens(readTokens()))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
+  return tokens
 }

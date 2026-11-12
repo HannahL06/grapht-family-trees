@@ -17,6 +17,20 @@ export function TextField({ label, className = '', ...props }) {
   )
 }
 
+export function TextArea({ label, className = '', ...props }) {
+  const id = useId()
+  return (
+    <div className={className}>
+      {label && (
+        <label htmlFor={id} className="mb-1 block font-medium">
+          {label}
+        </label>
+      )}
+      <textarea id={id} rows={3} className={`${input} py-2`} {...props} />
+    </div>
+  )
+}
+
 export function SearchField({ className = '', ...props }) {
   return <input type="search" className={`${input} rounded-full px-5 ${className}`} {...props} />
 }

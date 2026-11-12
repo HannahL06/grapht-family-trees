@@ -9,11 +9,11 @@ Hours are the real unit; week numbers are projections that slide with actual pac
 | Phase | Tasks | Est. hrs | Cumulative hrs | Projected weeks (@3/wk) |
 |---|---|---|---|---|
 | 1 Backend foundations | 1.1 (2) 1.2 (1) 1.3 (1) 1.4 (1.5) 1.5 (1) 1.6 (1.5) 1.7 (1.5) 1.8 (1.5) 1.9 (1.5) 1.10 (2) 1.11 (1.5) | 16 | 16 | 1–6 |
-| 2 Preliminary UI | 2.1 (1) 2.2 (1) 2.x (4) 2.y (2.5) 2.3 (1.5) 2.4 (2) 2.5 (2) 2.6 (2.5) 2.7 (3.5) 2.8 (1.5) 2.9 (1.5) 2.10 (1.5) | 24.5 | 40.5 | 7–14 |
-| 3 Algorithm, access, security | 3.1 (1.5) 3.2 (1.5) 3.3 (1.5) 3.4 (1.5) 3.5 (1.5) 3.6 (2) 3.7 (2) 3.8 (1.5) | 13 | 53.5 | 15–18 |
-| 4 UI updates | 4.1 (2) 4.3 (1.5) 4.4 (3) 4.5 (2) 4.6 (1.5) | 10 | 63.5 | 19–22 |
-| 5 Testing & deploy | 5.1 (1) 5.2 (1) 5.3 (1) 5.4 (2) 5.x (1.5) 5.5 (2) 5.6 (2.5) | 11 | ~74.5 | 23–25 |
-| 6 Buffer / write-up | 6.1–6.3 | 6–12 | ~80.5–86.5 | 26–29 |
+| 2 Preliminary UI | 2.1 (1) 2.2 (1) 2.x (4) 2.y (2.5) 2.z (1) 2.3 (1.5) 2.4 (2) 2.5 (2) 2.6 (2.5) 2.7 (3.5) 2.8 (1.5) 2.9 (1.5) 2.10 (1.5) | 25.5 | 41.5 | 7–14 |
+| 3 Algorithm, access, security | 3.1 (1.5) 3.2 (1.5) 3.3 (1.5) 3.4 (1.5) 3.5 (1.5) 3.6 (2) 3.7 (2) 3.8 (1.5) | 13 | 54.5 | 15–18 |
+| 4 UI updates | 4.1 (2) 4.3 (1.5) 4.4 (3) 4.5 (2) 4.6 (1.5) | 10 | 64.5 | 19–22 |
+| 5 Testing & deploy | 5.1 (1) 5.2 (1) 5.3 (1) 5.4 (2) 5.x (1.5) 5.5 (2) 5.6 (2.5) | 11 | ~75.5 | 23–25 |
+| 6 Buffer / write-up | 6.1–6.3 | 6–12 | ~81.5–87.5 | 26–29 |
 
 **Projected finish: ~week 27–29** (vs. week 16 at 6 hrs/week). Estimates include reviewing and testing agent output; they are guesses until real pace data accumulates.
 

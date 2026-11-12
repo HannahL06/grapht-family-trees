@@ -3,12 +3,13 @@ import AppHeader from './AppHeader'
 /**
  * Page frame: header + content.
  * Default: centered content column. `fill`: the content gets the whole
- * remaining screen (used by the tree view's sidebar + canvas layout).
+ * remaining screen (the tree page's canvas). `toolbar` puts page-specific
+ * controls in the header.
  */
-export default function AppShell({ children, fill = false }) {
+export default function AppShell({ children, fill = false, toolbar = null }) {
   return (
     <div className={`flex flex-col bg-page text-ink ${fill ? 'h-screen' : 'min-h-screen'}`}>
-      <AppHeader />
+      <AppHeader toolbar={toolbar} />
       {fill ? (
         <div className="flex min-h-0 flex-1 flex-wrap">{children}</div>
       ) : (
