@@ -29,7 +29,7 @@ export default function RegisterPage() {
   return (
     <AppShell>
       <Card className="mx-auto max-w-md">
-        <h1 className="mb-6 font-display text-4xl font-semibold">Create account</h1>
+        <h1 className="mb-6 font-display text-4xl leading-none font-medium">Create account</h1>
         <form onSubmit={onSubmit} className="grid gap-4">
           <TextField
             label="Name"
@@ -63,7 +63,7 @@ export default function RegisterPage() {
             {busy ? 'Creating…' : 'Register'}
           </Button>
         </form>
-        <p className="mt-6 text-muted">
+        <p className="mt-6 text-sm text-muted">
           Already have an account?{' '}
           <Link to="/login" className="text-accent">
             Log in

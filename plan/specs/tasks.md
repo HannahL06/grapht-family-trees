@@ -469,3 +469,4 @@ Let a tree owner share a tree with someone who hasn't registered yet, by email (
 3. `KNOWN_DESCENDANT_OF` edge type for undocumented historical ancestors
 4. Kubernetes deployment (YAML manifests)
 5. Zoom-based density clustering visualization
+6. Single-service deploy: serve the built frontend from FastAPI (Render option 3). Run `npm run build` as part of the backend build (e.g. in a Dockerfile), mount `frontend/dist` with `StaticFiles` under the API routes, and add an `index.html` fallback for unknown non-`/api` paths. One service, one origin, so no CORS and no host rewrite rule. Trade-offs: a more complex build (Node and Python), every frontend change redeploys the backend, no CDN edge caching, and free-tier cold starts affect page loads too. Until then the frontend is a separate Render static site using a `/api/*` rewrite (see 5.x).

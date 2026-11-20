@@ -16,11 +16,11 @@ export default function AppHeader({ toolbar }) {
   const onMembers = /\/members(\/|$)/.test(pathname)
 
   return (
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b-2 border-rule px-7 py-3">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule px-6 py-3">
       <Link to="/trees" aria-label="Grapht, your trees" className="flex items-center">
-        <Logo className="h-14" />
+        <Logo className="h-10" />
       </Link>
-      <nav className="ml-5 flex flex-wrap gap-1">
+      <nav className="flex gap-0.5">
         <NavTab to="/trees" active={pathname.startsWith('/trees') && !onMembers}>
           Trees
         </NavTab>
@@ -30,15 +30,15 @@ export default function AppHeader({ toolbar }) {
           </NavTab>
         )}
       </nav>
-      <div className="flex flex-1 flex-wrap items-center gap-2 sm:ml-4 sm:gap-3">{toolbar}</div>
+      <div className="flex flex-1 flex-wrap items-center gap-2 sm:ml-2">{toolbar}</div>
       <UserMenu />
       <Link
         to="/settings"
         aria-label="Settings"
         title="Settings"
-        className="flex size-11 items-center justify-center rounded-full bg-chrome text-ink"
+        className="flex size-9 items-center justify-center rounded-lg border border-rule text-ink hover:bg-hover"
       >
-        <GearIcon />
+        <GearIcon size={17} strokeWidth={1.6} />
       </Link>
     </header>
   )

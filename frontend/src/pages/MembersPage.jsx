@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { errorMessage } from '../api/auth'
 import { listPeople } from '../api/people'
-import { AppShell, SearchField } from '../components/ui'
+import { AppShell, ChevronRightIcon, SearchField } from '../components/ui'
 
 const MAX_ROWS = 200 // keeps the page quick on very large trees; search narrows it
 
-// Same four columns for the header and every row
-const COLUMNS = 'grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] gap-4'
+// Same four columns (plus a small arrow column) for the header and every row
+const COLUMNS =
+  'grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)_20px] gap-4'
 
 export default function MembersPage() {
   const { id: treeId } = useParams()
@@ -41,7 +42,7 @@ export default function MembersPage() {
   return (
     <AppShell>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-4xl font-semibold">Members</h1>
+        <h1 className="font-display text-5xl leading-none font-medium tracking-[-0.01em]">Members</h1>
         <SearchField
           aria-label="Search members"
           placeholder="Search by name"
@@ -56,26 +57,29 @@ export default function MembersPage() {
       {people && (
         <div className="overflow-x-auto">
           <div className="min-w-[640px]">
-            <div className={`${COLUMNS} px-5 py-3.5 text-[13px] text-muted`}>
+            <div
+              className={`${COLUMNS} min-h-9 items-center border-b border-ink px-3 text-xs tracking-[0.06em] text-muted uppercase`}
+            >
               <span>Name</span>
               <span>Born</span>
               <span>Birthplace</span>
               <span>Married</span>
+              <span />
             </div>
             {shown.map((p) => (
               <Link
                 key={p.id}
                 to={`/trees/${treeId}/members/${p.id}`}
-                className={`${COLUMNS} items-center border-t-2 border-rule px-5 py-3 text-ink no-underline hover:bg-hover`}
+                className={`${COLUMNS} min-h-[52px] items-center border-t border-rule px-3 text-sm text-ink no-underline hover:bg-hover`}
               >
                 <span className="min-w-0 truncate font-bold">{p.name}</span>
-                <span className="text-[15px]">{p.birth_year ?? '—'}</span>
-                <span className="min-w-0 truncate text-[15px]">{p.birth_place || '—'}</span>
-                <span className="text-[15px]">
-                  {p.marriage_years.length ? p.marriage_years.join(', ') : '—'}
-                </span>
+                <span>{p.birth_year ?? '—'}</span>
+                <span className="min-w-0 truncate">{p.birth_place || '—'}</span>
+                <span>{p.marriage_years.length ? p.marriage_years.join(', ') : '—'}</span>
+                <ChevronRightIcon size={14} strokeWidth={1.8} className="text-muted" />
               </Link>
             ))}
+            {shown.length > 0 && <div className="border-t border-rule" />}
           </div>
         </div>
       )}

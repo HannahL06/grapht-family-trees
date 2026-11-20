@@ -4,18 +4,18 @@ import { errorMessage } from '../api/auth'
 import { getPerson, getRelatives, saveMemberEdit } from '../api/people'
 import { getTree } from '../api/trees'
 import MemberFormDialog from '../components/MemberFormDialog'
-import { AppShell, PencilIcon } from '../components/ui'
+import { AppShell, Button, PencilIcon } from '../components/ui'
 
-const sectionTitle = 'mb-2 text-[15px] font-bold tracking-[0.08em] text-muted uppercase'
+const sectionTitle = 'mb-1 text-xs font-bold tracking-[0.08em] text-muted uppercase'
 const row =
-  'flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b-2 border-rule py-5'
+  'flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-rule py-4'
 
 /** A ruled "label ... value" row. */
 function Fact({ label, children }) {
   return (
     <div className={row}>
-      <div className="text-[19px] text-muted">{label}</div>
-      <div className="text-[26px]">{children}</div>
+      <div className="text-sm text-muted">{label}</div>
+      <div className="text-xl">{children}</div>
     </div>
   )
 }
@@ -89,7 +89,7 @@ export default function MemberPage() {
     <AppShell>
       <Link
         to={`/trees/${treeId}/members`}
-        className="text-lg font-medium text-accent no-underline hover:underline"
+        className="text-sm font-medium text-accent no-underline hover:underline"
       >
         ← All members
       </Link>
@@ -102,33 +102,32 @@ export default function MemberPage() {
 
       {ready && (
         <>
-          <div className="mt-7 mb-9 flex flex-wrap items-center gap-7 border-b-2 border-rule pb-9">
+          <div className="mt-7 mb-9 flex flex-wrap items-end justify-between gap-5 border-b border-ink pb-7">
             <div className="min-w-[260px] flex-1">
-              <h1 className="font-display text-[56px] leading-[1.1] font-semibold">
+              <h1 className="font-display text-[56px] leading-none font-medium tracking-[-0.01em]">
                 {person.name}
               </h1>
-              <div className="mt-2 text-[22px] text-muted">{tree?.name ?? ''}</div>
+              <div className="mt-3 text-sm text-muted">{tree?.name ?? ''}</div>
             </div>
-            <div className="flex flex-wrap items-center gap-7 text-[19px]">
+            <div className="flex items-center gap-5 text-sm">
               <Link
                 to={`/trees/${treeId}?selected=${personId}`}
                 className="font-medium text-accent no-underline hover:underline"
               >
                 Show in tree
               </Link>
-              <button
-                type="button"
+              <Button
+                variant="row"
                 aria-label="Edit member"
                 title="Edit"
                 onClick={() => setEditing(true)}
-                className="flex size-14 cursor-pointer items-center justify-center rounded-full bg-transparent text-accent hover:bg-chrome"
               >
-                <PencilIcon size={28} />
-              </button>
+                <PencilIcon size={16} strokeWidth={1.8} />
+              </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] gap-x-20 gap-y-12">
+          <div className="flex max-w-[720px] flex-col gap-11">
             <section>
               <h2 className={sectionTitle}>Details</h2>
               {person.gender && (
@@ -140,21 +139,19 @@ export default function MemberPage() {
               <Fact label="Married">{years.length ? years.join(', ') : '—'}</Fact>
               {person.notes && (
                 <div className={row}>
-                  <div className="text-[19px] text-muted">Notes</div>
-                  <div className="max-w-md text-[19px] whitespace-pre-wrap">{person.notes}</div>
+                  <div className="text-sm text-muted">Notes</div>
+                  <div className="max-w-md text-base whitespace-pre-wrap">{person.notes}</div>
                 </div>
               )}
             </section>
 
             <section>
               <h2 className={sectionTitle}>Family</h2>
-              {groups.length === 0 && (
-                <p className="py-5 text-[19px] text-muted">No family linked yet.</p>
-              )}
+              {groups.length === 0 && <p className="py-4 text-sm text-muted">No family linked yet.</p>}
               {groups.map((g) => (
                 <div key={g.label} className={row}>
-                  <div className="text-[19px] text-muted">{g.label}</div>
-                  <div className="flex flex-col items-end gap-1.5 text-[26px]">
+                  <div className="text-sm text-muted">{g.label}</div>
+                  <div className="flex flex-col items-end gap-1.5 text-xl">
                     {g.people.map((p) => (
                       <div key={p.relationship_id ?? p.id} className="text-right">
                         <Link
@@ -164,7 +161,7 @@ export default function MemberPage() {
                           {p.name}
                         </Link>
                         {g.label.startsWith('Spouse') && marriageNote(p) && (
-                          <div className="text-[15px] text-muted">{marriageNote(p)}</div>
+                          <div className="text-[13px] text-muted">{marriageNote(p)}</div>
                         )}
                       </div>
                     ))}

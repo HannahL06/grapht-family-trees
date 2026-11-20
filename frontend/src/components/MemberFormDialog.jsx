@@ -11,7 +11,7 @@ const emptyMarriage = { year: '', divorced: false, divorceYear: '' }
 function GenderField({ value, onChange }) {
   return (
     <div role="group" aria-labelledby="gender-label">
-      <div id="gender-label" className="mb-1 font-medium">
+      <div id="gender-label" className="mb-1 text-[13px] font-medium">
         Gender
       </div>
       <div className="flex gap-2">
@@ -24,7 +24,7 @@ function GenderField({ value, onChange }) {
             type="button"
             aria-pressed={value === key}
             onClick={() => onChange(value === key ? '' : key)}
-            className={`min-h-11 flex-1 cursor-pointer rounded-xl border-2 px-4 font-medium ${
+            className={`min-h-9 flex-1 cursor-pointer rounded-lg border px-4 text-sm font-medium ${
               value === key
                 ? 'border-accent bg-accent text-on-accent'
                 : 'border-rule bg-page text-ink hover:bg-hover'
@@ -49,20 +49,20 @@ const toMarriage = (m) => ({
 function MarriageFields({ title, value, onChange }) {
   const set = (patch) => onChange({ ...value, ...patch })
   return (
-    <fieldset className="grid gap-3 rounded-xl border-2 border-rule p-3">
-      <legend className="px-1 font-medium">{title}</legend>
+    <fieldset className="grid gap-3 rounded-lg border border-rule p-3">
+      <legend className="px-1 text-[13px] font-medium">{title}</legend>
       <TextField
         label="Marriage year (optional)"
         type="number"
         value={value.year}
         onChange={(e) => set({ year: e.target.value })}
       />
-      <label className="flex min-h-11 cursor-pointer items-center gap-3">
+      <label className="flex min-h-9 cursor-pointer items-center gap-2.5 text-sm">
         <input
           type="checkbox"
           checked={value.divorced}
           onChange={(e) => set({ divorced: e.target.checked })}
-          className="size-5 accent-accent"
+          className="size-4 accent-accent"
         />
         Divorced
       </label>
@@ -192,10 +192,10 @@ export default function MemberFormDialog({
 
         {/* Edit mode only: add a relative, or delete this person */}
         {(onAddRelative || onDelete) && (
-          <div className="grid gap-4 border-t-2 border-rule pt-4">
+          <div className="grid gap-4 border-t border-rule pt-4">
             {onAddRelative && (
               <div>
-                <div className="mb-2 font-medium">Add a relative</div>
+                <div className="mb-2 text-[13px] font-medium">Add a relative</div>
                 <div className="flex flex-wrap gap-2">
                   {['parent', 'spouse', 'child'].map((kind) => (
                     <Button key={kind} variant="soft" onClick={() => onAddRelative(kind)}>
@@ -209,7 +209,7 @@ export default function MemberFormDialog({
               <button
                 type="button"
                 onClick={onDelete}
-                className="cursor-pointer self-start bg-transparent p-0 text-accent underline-offset-4 hover:underline"
+                className="cursor-pointer self-start bg-transparent p-0 text-sm text-accent underline-offset-4 hover:underline"
               >
                 Delete {form.name.trim() || 'this person'}…
               </button>

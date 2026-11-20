@@ -9,10 +9,13 @@ import SettingsPage from './pages/SettingsPage'
 import Styleguide from './pages/Styleguide'
 import TreesPage from './pages/TreesPage'
 import TreeView from './pages/TreeView'
+import { useTheme } from './theme'
 
 const protectedPage = (page) => <ProtectedRoute>{page}</ProtectedRoute>
 
 function App() {
+  // Apply the saved (or OS) theme on every page; the switch itself lives in Settings.
+  useTheme()
   return (
     <BrowserRouter>
       <Routes>
