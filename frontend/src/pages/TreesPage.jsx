@@ -19,8 +19,13 @@ function Thumbnail({ id }) {
   const fill = alt ? 'var(--node-b)' : 'var(--node-a)'
   const stroke = alt ? 'var(--line-b)' : 'var(--line-a)'
   return (
-    <div className="h-40 overflow-hidden rounded-xl border border-rule bg-canvas group-hover:border-accent">
-      <svg width="100%" height="160" viewBox="0 0 260 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    // fills the upper part of the card; the translucent name banner covers the rest
+    <svg
+      className="absolute inset-x-0 top-0 h-[72%] w-full"
+      viewBox="0 0 260 150"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+    >
         <g transform={`rotate(${rotation} 130 75)`}>
           <g stroke="var(--edge)" strokeWidth="1.3">
             <line x1="130" y1="75" x2="70" y2="40" />
@@ -42,21 +47,21 @@ function Thumbnail({ id }) {
             <circle cx="225" cy="75" r="6" />
           </g>
         </g>
-      </svg>
-    </div>
+    </svg>
   )
 }
 
+/** The whole card is the graph picture; name and count sit on a translucent banner at the bottom. */
 function TreeCard({ tree }) {
   return (
     <Link
       to={`/trees/${tree.id}`}
-      className="group block text-ink no-underline"
+      className="group relative block h-60 overflow-hidden rounded-xl border border-rule bg-canvas text-ink no-underline hover:border-accent"
     >
       <Thumbnail id={tree.id} />
-      <div className="px-0.5 pt-3.5">
-        <div className="font-display text-2xl leading-[1.15] font-medium">{tree.name}</div>
-        <div className="mt-1.5 text-[13px] text-muted">
+      <div className="absolute inset-x-0 bottom-0 bg-page/70 px-4 pt-3 pb-3.5 backdrop-blur-[3px]">
+        <div className="truncate font-display text-2xl leading-[1.15] font-medium">{tree.name}</div>
+        <div className="mt-1 text-[13px] text-muted">
           {tree.member_count} {tree.member_count === 1 ? 'member' : 'members'}
         </div>
       </div>
@@ -70,7 +75,7 @@ function NewTreeCard({ onCreated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const box =
-    'flex min-h-[226px] items-center justify-center rounded-xl border border-dashed border-rule'
+    'flex min-h-60 items-center justify-center rounded-xl border border-dashed border-rule'
 
   async function onSubmit(e) {
     e.preventDefault()

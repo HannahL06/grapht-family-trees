@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listPeople } from '../api/people'
-import { Button, CloseIcon, PillToggle, PlusIcon, RelationshipIcon, SearchIcon } from './ui'
+import { Button, CloseIcon, PillToggle, RelationshipIcon, SearchIcon } from './ui'
 
 /** Search: a button that expands into a field with a results list under it. */
 function PersonSearch({ treeId, onPick }) {
@@ -89,9 +89,10 @@ function PersonSearch({ treeId, onPick }) {
 
 /**
  * The tree page's controls, shown in the top bar: tree name, search, the
- * Graph/Tree switch, the relationship calculator, and Add member.
+ * Graph/Tree switch and the relationship calculator. (Adding a member is the
+ * floating + button on the canvas, not part of the top bar.)
  */
-export default function TreeToolbar({ treeId, treeName, view, onViewChange, onPick, onAddMember }) {
+export default function TreeToolbar({ treeId, treeName, view, onViewChange, onPick }) {
   return (
     <>
       <span
@@ -121,15 +122,6 @@ export default function TreeToolbar({ treeId, treeName, view, onViewChange, onPi
         <RelationshipIcon size={16} strokeWidth={1.7} className="text-accent" />
         <span className="hidden xl:inline">Relationship calculator</span>
       </button>
-      <Button
-        aria-label="Add member"
-        title="Add member"
-        onClick={onAddMember}
-        className="max-lg:size-9 max-lg:px-0"
-      >
-        <PlusIcon size={14} strokeWidth={2.2} />
-        <span className="max-lg:sr-only">Add member</span>
-      </Button>
     </>
   )
 }

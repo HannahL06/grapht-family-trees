@@ -16,7 +16,7 @@ import MemberCard from '../components/MemberCard'
 import MemberFormDialog from '../components/MemberFormDialog'
 import TreeGraph from '../components/TreeGraph'
 import TreeToolbar from '../components/TreeToolbar'
-import { AppShell } from '../components/ui'
+import { AppShell, PlusIcon } from '../components/ui'
 
 const RELATIVE_LABEL = { parent: 'parent', spouse: 'spouse', child: 'child' }
 
@@ -133,7 +133,6 @@ export default function TreeView() {
       view={view}
       onViewChange={changeView}
       onPick={setSelectedId}
-      onAddMember={() => setDialog({ type: 'add' })}
     />
   )
 
@@ -151,9 +150,20 @@ export default function TreeView() {
             />
           )}
         </TreeGraph>
+        {/* Add member: a small button floating in the top-right corner of the canvas,
+            right under the user menu in the top bar. */}
+        <button
+          type="button"
+          aria-label="Add member"
+          title="Add member"
+          onClick={() => setDialog({ type: 'add' })}
+          className="absolute top-4 right-6 z-20 flex size-11 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent shadow-[0_6px_18px_rgba(15,42,67,0.2)] hover:opacity-90"
+        >
+          <PlusIcon size={20} strokeWidth={2.2} />
+        </button>
         {graphData && graphData.nodes.length === 0 && (
           <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-lg text-muted">
-            This tree is empty. Use “Add member” in the top bar to add the first person.
+            This tree is empty. Use the + button in the top-right corner to add the first person.
           </p>
         )}
       </main>
