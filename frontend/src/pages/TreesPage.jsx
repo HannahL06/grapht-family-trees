@@ -19,8 +19,8 @@ function Thumbnail({ id }) {
   const fill = alt ? 'var(--node-b)' : 'var(--node-a)'
   const stroke = alt ? 'var(--line-b)' : 'var(--line-a)'
   return (
-    <div className="h-[150px] rounded-3xl bg-canvas">
-      <svg width="100%" height="150" viewBox="0 0 260 150" aria-hidden="true">
+    <div className="h-40 overflow-hidden rounded-xl border border-rule bg-canvas group-hover:border-accent">
+      <svg width="100%" height="160" viewBox="0 0 260 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <g transform={`rotate(${rotation} 130 75)`}>
           <g stroke="var(--edge)" strokeWidth="1.3">
             <line x1="130" y1="75" x2="70" y2="40" />
@@ -51,12 +51,12 @@ function TreeCard({ tree }) {
   return (
     <Link
       to={`/trees/${tree.id}`}
-      className="block overflow-hidden rounded-3xl bg-card text-ink no-underline hover:opacity-90"
+      className="group block text-ink no-underline"
     >
       <Thumbnail id={tree.id} />
-      <div className="px-5 pt-4 pb-4.5">
-        <div className="text-[19px] font-bold">{tree.name}</div>
-        <div className="mt-1 text-sm text-muted">
+      <div className="px-0.5 pt-3.5">
+        <div className="font-display text-2xl leading-[1.15] font-medium">{tree.name}</div>
+        <div className="mt-1.5 text-[13px] text-muted">
           {tree.member_count} {tree.member_count === 1 ? 'member' : 'members'}
         </div>
       </div>
@@ -70,7 +70,7 @@ function NewTreeCard({ onCreated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const box =
-    'flex min-h-[228px] items-center justify-center rounded-3xl border-2 border-dashed border-rule'
+    'flex min-h-[226px] items-center justify-center rounded-xl border border-dashed border-rule'
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -92,9 +92,9 @@ function NewTreeCard({ onCreated }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`${box} cursor-pointer gap-2.5 bg-transparent text-[17px] font-bold text-accent`}
+        className={`${box} cursor-pointer gap-2 bg-transparent text-sm font-medium text-accent`}
       >
-        <PlusIcon size={22} /> New tree
+        <PlusIcon size={16} /> New tree
       </button>
     )
   }
@@ -139,10 +139,10 @@ export default function TreesPage() {
 
   return (
     <AppShell>
-      <h1 className="mb-7 font-display text-4xl font-semibold">Trees</h1>
+      <h1 className="mb-8 font-display text-5xl leading-none font-medium tracking-[-0.01em]">Trees</h1>
       {error && <p role="alert">{error}</p>}
       {trees && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-8">
           {trees.map((t) => (
             <TreeCard key={t.id} tree={t} />
           ))}

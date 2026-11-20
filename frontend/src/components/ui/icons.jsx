@@ -45,6 +45,7 @@ export const SearchIcon = svg(
   </>,
 )
 export const CloseIcon = svg(<path d="M6 6l12 12M18 6L6 18" />)
+export const ChevronRightIcon = svg(<path d="M9 6l6 6-6 6" />)
 export const GearIcon = svg(
   <>
     <circle cx="12" cy="12" r="3" />

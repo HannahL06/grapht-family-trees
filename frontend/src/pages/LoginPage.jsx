@@ -26,7 +26,7 @@ export default function LoginPage() {
   return (
     <AppShell>
       <Card className="mx-auto max-w-md">
-        <h1 className="mb-6 font-display text-4xl font-semibold">Log in</h1>
+        <h1 className="mb-6 font-display text-4xl leading-none font-medium">Log in</h1>
         <form onSubmit={onSubmit} className="grid gap-4">
           <TextField
             label="Email"
@@ -53,7 +53,7 @@ export default function LoginPage() {
             {busy ? 'Logging in…' : 'Log in'}
           </Button>
         </form>
-        <p className="mt-6 text-muted">
+        <p className="mt-6 text-sm text-muted">
           No account?{' '}
           <Link to="/register" className="text-accent">
             Register

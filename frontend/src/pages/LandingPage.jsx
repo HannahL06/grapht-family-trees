@@ -75,7 +75,7 @@ export default function LandingPage() {
     <div className="flex min-h-screen flex-col bg-page text-ink">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-10 py-5">
         <div className="flex flex-1 items-center">
-          <Logo className="h-16" />
+          <Logo className="h-12" />
         </div>
         <nav className="flex flex-wrap gap-2">
           <a href="#how-it-works" className={navLink}>
@@ -90,9 +90,13 @@ export default function LandingPage() {
             type="button"
             onClick={toggle}
             aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-            className="flex size-11 cursor-pointer items-center justify-center rounded-full bg-chrome text-ink"
+            className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-rule bg-transparent text-ink hover:bg-hover"
           >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            {theme === 'dark' ? (
+              <SunIcon size={17} strokeWidth={1.7} />
+            ) : (
+              <MoonIcon size={17} strokeWidth={1.7} />
+            )}
           </button>
           <Link
             to={start}
@@ -104,7 +108,7 @@ export default function LandingPage() {
       </header>
 
       <main className="flex flex-1 flex-col">
-        <h1 className="mx-6 mt-16 text-center font-hero text-[clamp(44px,7vw,96px)] leading-none font-medium tracking-[-0.03em]">
+        <h1 className="mx-6 mt-16 text-center font-hero text-[clamp(44px,7vw,96px)] leading-[1.05] font-medium tracking-[-0.02em]">
           See your whole family.
         </h1>
 
@@ -115,15 +119,21 @@ export default function LandingPage() {
 
         {/* Placeholder sections the header links scroll to */}
         <section id="how-it-works" className="mx-auto w-full max-w-[1120px] scroll-mt-6 px-8 py-24">
-          <h2 className="mb-4 font-display text-4xl font-semibold">How it works</h2>
-          <p className="max-w-xl text-lg text-muted">
+          <h2 className="mb-4 font-hero text-4xl leading-[1.1] font-medium tracking-[-0.01em]">
+            How it works
+          </h2>
+          <p className="max-w-xl text-base leading-relaxed text-muted">
             Add the people in your family, link them as parents, spouses and children, and explore
             the whole tree as a graph. A fuller guide is coming soon.
           </p>
         </section>
         <section id="contact" className="mx-auto w-full max-w-[1120px] scroll-mt-6 px-8 pb-24">
-          <h2 className="mb-4 font-display text-4xl font-semibold">Contact</h2>
-          <p className="max-w-xl text-lg text-muted">Contact details are coming soon.</p>
+          <h2 className="mb-4 font-hero text-4xl leading-[1.1] font-medium tracking-[-0.01em]">
+            Contact
+          </h2>
+          <p className="max-w-xl text-base leading-relaxed text-muted">
+            Contact details are coming soon.
+          </p>
         </section>
       </main>
     </div>

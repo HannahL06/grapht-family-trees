@@ -36,14 +36,14 @@ export default function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="min-h-11 max-w-48 cursor-pointer truncate rounded-full bg-chrome px-5 font-medium text-ink"
+        className="min-h-9 max-w-48 cursor-pointer truncate rounded-full bg-chrome px-[18px] text-sm font-medium text-ink"
       >
         {name || 'user'}
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-2 min-w-40 rounded-2xl border-2 border-rule bg-page p-1"
+          className="absolute right-0 z-40 mt-1.5 min-w-36 rounded-xl border border-rule bg-page p-1"
         >
           <button
             type="button"
@@ -52,7 +52,7 @@ export default function UserMenu() {
               logout()
               navigate('/login', { replace: true })
             }}
-            className="min-h-11 w-full cursor-pointer rounded-xl px-4 text-left text-ink hover:bg-chrome"
+            className="min-h-[34px] w-full cursor-pointer rounded-lg px-3 text-left text-sm text-ink hover:bg-hover"
           >
             Log out
           </button>

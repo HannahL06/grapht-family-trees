@@ -20,7 +20,7 @@ export default function ConfirmDeleteDialog({ name, onConfirm, onClose }) {
 
   return (
     <Dialog title={`Delete ${name}?`} onClose={onClose}>
-      <p className="mb-5 text-muted">
+      <p className="mb-5 text-sm leading-relaxed text-muted">
         This also removes all of {name}&apos;s relationships (parents, spouses and children links).
         The other people stay. This cannot be undone.
       </p>
