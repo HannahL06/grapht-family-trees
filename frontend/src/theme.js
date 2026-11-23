@@ -40,6 +40,7 @@ export function readTokens() {
     lineB: get('--line-b'),
     edge: get('--edge'),
     ink: get('--ink'),
+    onNode: get('--on-node'),
     muted: get('--muted'),
     page: get('--page'),
     card: get('--card'),

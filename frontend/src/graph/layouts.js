@@ -127,11 +127,48 @@ export function applyTreeLayout(graph) {
 // thread), so bigger trees use the simple linear-time layout below.
 const DAGRE_UNIT_LIMIT = 1500
 
+/**
+ * Generation of every unit: how far it is from the oldest ancestors (longest
+ * path from the roots, so a person is always below all of their parents).
+ * Kahn's algorithm; anything stuck in a cycle stays at generation 0.
+ * Siblings therefore always share a row, whatever their descendants look like.
+ */
+function rankUnits(ids, links) {
+  const children = new Map(ids.map((u) => [u, []]))
+  const indegree = new Map(ids.map((u) => [u, 0]))
+  for (const [from, to] of links) {
+    children.get(from).push(to)
+    indegree.set(to, indegree.get(to) + 1)
+  }
+  const rank = new Map(ids.map((u) => [u, 0]))
+  const queue = ids.filter((u) => indegree.get(u) === 0)
+  for (let head = 0; head < queue.length; head++) {
+    const u = queue[head]
+    for (const c of children.get(u)) {
+      rank.set(c, Math.max(rank.get(c), rank.get(u) + 1))
+      indegree.set(c, indegree.get(c) - 1)
+      if (indegree.get(c) === 0) queue.push(c)
+    }
+  }
+  return rank
+}
+
 function placeWithDagre(unitIds, widths, links) {
+  const ids = [...unitIds]
+  const ranks = rankUnits(ids, links)
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ ranker: 'longest-path', rankdir: 'TB', nodesep: SLOT * 0.6, ranksep: RANK_GAP })
+  // A custom ranker: dagre keeps the generations computed above and only orders each row.
+  // (Its own 'longest-path' ranker pulls a family down next to its descendants, which put
+  // some siblings one row lower than the others.)
+  // dagre doubles every link's minimum length (to leave room for edge labels), so
+  // consecutive generations must be that many ranks apart.
+  const useGenerations = (layoutGraph) => {
+    const gap = 2 * (layoutGraph.graph().nodeRankFactor ?? 1)
+    for (const v of layoutGraph.nodes()) layoutGraph.node(v).rank = (ranks.get(v) ?? 0) * gap
+  }
+  g.setGraph({ ranker: useGenerations, rankdir: 'TB', nodesep: SLOT * 0.6, ranksep: RANK_GAP })
   g.setDefaultEdgeLabel(() => ({}))
-  for (const unit of unitIds) g.setNode(unit, { width: widths.get(unit), height: 20 })
+  for (const unit of ids) g.setNode(unit, { width: widths.get(unit), height: 20 })
   for (const [from, to] of links) g.setEdge(from, to)
   dagre.layout(g)
   const spots = new Map()
@@ -153,24 +190,13 @@ function placeFast(unitIds, widths, links) {
   const ids = [...unitIds]
   const children = new Map(ids.map((u) => [u, []]))
   const parents = new Map(ids.map((u) => [u, []]))
-  const indegree = new Map(ids.map((u) => [u, 0]))
   for (const [from, to] of links) {
     children.get(from).push(to)
     parents.get(to).push(from)
-    indegree.set(to, indegree.get(to) + 1)
   }
 
-  // 1. ranks (Kahn's algorithm; anything stuck in a cycle stays at rank 0)
-  const rank = new Map(ids.map((u) => [u, 0]))
-  const queue = ids.filter((u) => indegree.get(u) === 0)
-  for (let head = 0; head < queue.length; head++) {
-    const u = queue[head]
-    for (const c of children.get(u)) {
-      rank.set(c, Math.max(rank.get(c), rank.get(u) + 1))
-      indegree.set(c, indegree.get(c) - 1)
-      if (indegree.get(c) === 0) queue.push(c)
-    }
-  }
+  // 1. ranks (generations)
+  const rank = rankUnits(ids, links)
   const layers = []
   for (const u of ids) {
     const r = rank.get(u)

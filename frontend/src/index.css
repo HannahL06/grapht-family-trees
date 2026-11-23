@@ -24,6 +24,7 @@
   --muted: #4a627a;
   --accent: #0f6cbd;
   --on-accent: #ffffff;
+  --on-node: #0b1220; /* names inside the graph circles; dark reads on both node blues */
   --band: #dcecf8;
   --node-a: #1e88e5;
   --node-b: #7cc0f2;
@@ -44,6 +45,7 @@
   --muted: #9fb0c8;
   --accent: #6ea8fe;
   --on-accent: #0b1220;
+  --on-node: #0b1220;
   --band: #1c2940;
   --node-a: #4d9cf0;
   --node-b: #9bcbf7;
