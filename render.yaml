@@ -1,0 +1,50 @@
+# Render Blueprint: two separate services.
+#   grapht-api  the FastAPI backend (Python web service)
+#   grapht      the React frontend (static site)
+#
+# The frontend calls relative /api/... URLs, and the backend serves every route
+# under /api too, so the static site simply forwards /api/* to the backend (see
+# `routes` below). The browser only ever talks to the grapht site, so no CORS
+# setup is needed.
+
+services:
+  - type: web
+    name: grapht-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # Secrets: Render asks for these when the Blueprint is created (see backend/.env.example)
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: web
+    name: grapht
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+    routes:
+      # API calls go to the backend service. If Render gives the backend a
+      # different address (for example because the name is taken), change it here.
+      - type: rewrite
+        source: /api/*
+        destination: https://grapht-api.onrender.com/api/*
+      # Every other path is a React page (/trees, /login, ...): serve the app
+      # so a refresh doesn't 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
