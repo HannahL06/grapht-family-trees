@@ -10,20 +10,29 @@ function shadeOf(id) {
 }
 
 /**
+ * The name drawn inside a person's circle: the first name, shortened with "…"
+ * if it is too long to fit. (The full name is on their card.)
+ */
+const MAX_LABEL = 9
+export function shortName(name = '') {
+  const first = name.trim().split(/\s+/)[0] ?? ''
+  return first.length > MAX_LABEL ? `${first.slice(0, MAX_LABEL - 1)}…` : first
+}
+
+/**
  * API data -> graphology graph.
  * `previous` (id -> {x, y}) keeps people where they were across reloads, so
  * adding someone doesn't scramble a layout you were looking at; new people
  * start next to a relative.
  */
-export function buildGraph(data, previous = new Map()) {
+export function buildGraph(data, previous = new Map(), size = 34) {
   // multi: a person pair can in theory have more than one edge
   const graph = new Graph({ multi: true })
-  const size = data.nodes.length > 2000 ? 4 : 9
 
   for (const n of data.nodes) {
     const was = previous.get(n.id)
     graph.addNode(n.id, {
-      label: n.name,
+      label: shortName(n.name),
       size,
       shade: shadeOf(n.id),
       x: was?.x ?? Math.random() * 100,

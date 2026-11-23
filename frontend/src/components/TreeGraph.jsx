@@ -13,10 +13,19 @@ const CLEAR = 'rgba(0,0,0,0)'
 // parent -> child links of the Tree view.
 const LINE_PATH = pathLine()
 const ELBOW_PATH = pathStep({ orientation: 'vertical' })
-// Graph view: names sit centered on the node, so show them only once zoom has
-// made the node big enough to hold a name (rendered node radius in pixels).
-const GRAPH_LABEL_THRESHOLD = 20
+
+// People are big circles with their name inside. A name is drawn once its
+// circle is at least this big (rendered radius in pixels); zoom in to read
+// the names of a very large tree.
+const LABEL_MIN_RADIUS = 18
 const SELECTED_GROWTH = 3 // a selected node is drawn this much bigger
+
+// Circle size (radius, px): as big as fits, down to a dot for huge trees.
+const MAX_SIZE = 34
+const MIN_SIZE = 4
+// Connected people sit about this many radii apart (centers): close together,
+// with room for the link between them.
+const SPACING = 4
 
 /** Mark one person as selected (Sigma's "highlighted" state draws the ring). */
 function applyHighlight(sigma, id, highlightedRef) {
@@ -31,15 +40,12 @@ function applyHighlight(sigma, id, highlightedRef) {
   }
 }
 
-const CARD_GAP = 14 // space between the node's ring and the card
-const EDGE_MARGIN = 8 // the card never gets closer than this to the canvas edge
-
 /**
- * Put the selection ring on the selected node, and the pop-up card right
- * beside it. Both are plain HTML on top of the canvas, repositioned after
- * every render so they follow panning, zooming and layout movement. The card
- * goes to the right of the node, flips to the left near the right edge, and
- * is kept inside the canvas.
+ * Put the selection ring on the selected node, and show the member card. The
+ * ring is plain HTML on top of the canvas, repositioned after every render so
+ * it follows panning, zooming and layout movement. The card does not follow
+ * the node: it sits in a fixed spot at the right of the canvas, under the
+ * add-member button (see the card container in the JSX below).
  */
 function placeOverlay(sigma, { card, ring }, id) {
   if (!sigma || !card || !ring) return
@@ -57,19 +63,143 @@ function placeOverlay(sigma, { card, ring }, id) {
   ring.style.transform = `translate(${p.x - radius}px, ${p.y - radius}px)`
 
   // the card exists only once the person's data has loaded
-  if (!card.firstElementChild) {
-    card.style.display = 'none'
-    return
+  card.style.display = card.firstElementChild ? 'flex' : 'none'
+}
+
+const CIRCLE_GAP = 24 // free space wanted between two circles, px
+const TOUCH_GAP = 10 // the least free space allowed (circles shrink before they touch), px
+const SEPARATE_LIMIT = 400 // bigger trees just get smaller circles instead
+
+/** Size of one layout unit on screen (px), read from the two furthest-apart corners. */
+function pixelsPerUnit(sigma, points) {
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const p of points) {
+    minX = Math.min(minX, p.x)
+    maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y)
+    maxY = Math.max(maxY, p.y)
   }
-  card.style.display = 'block'
-  const { width, height } = sigma.getDimensions()
-  const w = card.offsetWidth
-  const h = card.offsetHeight
-  let x = p.x + radius + CARD_GAP
-  if (x + w > width - EDGE_MARGIN) x = p.x - radius - CARD_GAP - w // flip to the left
-  x = Math.max(EDGE_MARGIN, Math.min(x, width - w - EDGE_MARGIN))
-  const y = Math.max(EDGE_MARGIN, Math.min(p.y - 28, height - h - EDGE_MARGIN))
-  card.style.transform = `translate(${x}px, ${y}px)`
+  const a = sigma.graphToViewport({ x: minX, y: minY })
+  const b = sigma.graphToViewport({ x: maxX, y: maxY })
+  const units = Math.hypot(maxX - minX, maxY - minY)
+  return units ? Math.hypot(a.x - b.x, a.y - b.y) / units : 1
+}
+
+/**
+ * Push overlapping people apart. The force layout treats people as points, so
+ * with big circles some would sit on top of each other. Circle sizes are in
+ * pixels but positions are in layout units, so the pixel size of one unit is
+ * measured again after every round, because the drawing grows as people move.
+ */
+function separate(sigma, graph, radius) {
+  if (graph.order < 2 || graph.order > SEPARATE_LIMIT) return
+  const camera = sigma.getCamera()
+  camera.setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 })
+  const pts = graph.mapNodes((id, a) => ({ id, x: a.x, y: a.y }))
+  for (let round = 0; round < 30; round++) {
+    pts.forEach((p) => graph.mergeNodeAttributes(p.id, { x: p.x, y: p.y }))
+    sigma.refresh()
+    const wanted = (2 * radius + CIRCLE_GAP) / pixelsPerUnit(sigma, pts)
+    let moved = false
+    for (let pass = 0; pass < 4; pass++) {
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i]
+          const b = pts[j]
+          let dx = b.x - a.x
+          let dy = b.y - a.y
+          let d = Math.hypot(dx, dy)
+          if (d >= wanted) continue
+          if (d === 0) {
+            dx = Math.random() - 0.5
+            dy = Math.random() - 0.5
+            d = Math.hypot(dx, dy)
+          }
+          const push = (wanted - d) / 2 / d
+          a.x -= dx * push
+          a.y -= dy * push
+          b.x += dx * push
+          b.y += dy * push
+          moved = true
+        }
+      }
+    }
+    if (!moved) break
+  }
+  pts.forEach((p) => graph.mergeNodeAttributes(p.id, { x: p.x, y: p.y }))
+  sigma.refresh()
+}
+
+/**
+ * Make the picture compact. At the default zoom the graph is stretched to
+ * fill the canvas, which for a small family leaves people far apart. Here the
+ * circle size and the drawing area are chosen so connected people are about
+ * SPACING radii apart: a small tree keeps full-size circles and is padded so
+ * it does not spread out; a big tree gets smaller circles that still just fit.
+ * Returns the circle size and the padded drawing area used.
+ */
+function tightenView(sigma, graph) {
+  if (graph.order < 2 || graph.size === 0) return null
+  const camera = sigma.getCamera()
+  sigma.setCustomBBox(null)
+  camera.setState({ x: 0.5, y: 0.5, ratio: 1, angle: 0 })
+
+  // average length of a link on screen, before any padding
+  let total = 0
+  let links = 0
+  graph.forEachEdge((edge, attrs, source, target) => {
+    const a = graph.getNodeAttributes(source)
+    const b = graph.getNodeAttributes(target)
+    const p = sigma.graphToViewport({ x: a.x, y: a.y })
+    const q = sigma.graphToViewport({ x: b.x, y: b.y })
+    total += Math.hypot(p.x - q.x, p.y - q.y)
+    links += 1
+  })
+  if (!links || total === 0) return null
+  const average = total / links
+
+  // The closest two people on screen right now: circles must never overlap them.
+  let closest = Infinity
+  if (graph.order <= SEPARATE_LIMIT) {
+    const pts = graph.mapNodes((id, a) => sigma.graphToViewport({ x: a.x, y: a.y }))
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        closest = Math.min(closest, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y))
+      }
+    }
+  }
+  const bySpacing = average / SPACING
+  const byCloseness = (closest - TOUCH_GAP) / 2 // Infinity for very large trees
+  const size = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.min(bySpacing, byCloseness)))
+  graph.updateEachNodeAttributes((id, attrs) => ({ ...attrs, size }))
+  const roomToShrink = closest / (2 * size + CIRCLE_GAP) // 1 = circles already almost touching
+
+  // padding: only when even full-size circles would still be far apart
+  let bbox = null
+  const wanted = SPACING * size
+  if (average > wanted && roomToShrink > 1) {
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    graph.forEachNode((id, a) => {
+      minX = Math.min(minX, a.x)
+      maxX = Math.max(maxX, a.x)
+      minY = Math.min(minY, a.y)
+      maxY = Math.max(maxY, a.y)
+    })
+    const grow = Math.min(average / wanted, roomToShrink)
+    const span = Math.max(maxX - minX, maxY - minY, 1) * grow
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    bbox = { x: [cx - span / 2, cx + span / 2], y: [cy - span / 2, cy + span / 2] }
+    sigma.setCustomBBox(bbox)
+  }
+  sigma.refresh()
+  return { size, bbox }
 }
 
 /**
@@ -87,6 +217,7 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
   const selectedRef = useRef(selectedId)
   const onSelectRef = useRef(onSelect)
   const lastViewRef = useRef(null)
+  const viewRef = useRef({ size: MAX_SIZE, bbox: null }) // size and padding from the last fit
   const tokens = useTokens()
   const tokensRef = useRef(tokens)
 
@@ -138,17 +269,13 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
           {
             borderColor: { attribute: 'borderColor', defaultValue: CLEAR },
             size: (a, s) => a.size + (s.isHighlighted ? SELECTED_GROWTH : s.isHovered ? 2 : 0),
-            labelPosition: { attribute: 'labelPos', defaultValue: 'right' },
-            labelColor: () => tokensNow().ink,
-            labelSize: 11,
-            // a hovered or selected person always shows their name
-            labelVisibility: (a, s) => (s.isHovered || s.isHighlighted ? 'visible' : 'auto'),
-            // hovered: a small card behind the name (the selection ring is HTML, see placeOverlay)
-            backdropVisibility: (a, s) => (s.isHovered && !s.isHighlighted ? 'visible' : 'hidden'),
-            backdropColor: () => tokensNow().card,
-            backdropShadowColor: 'rgba(0,0,0,0.15)',
-            backdropShadowBlur: 8,
-            backdropPadding: 5,
+            // the name sits inside the circle, in a dark color that reads on both node fills
+            labelPosition: 'over',
+            labelColor: () => tokensNow().onNode,
+            // the name shrinks a little in tight spots so it stays inside its circle
+            labelSize: (a) => Math.min(12, Math.max(8, a.size * 0.45)),
+            labelVisibility: 'auto',
+            backdropVisibility: 'hidden',
           },
         ],
         edges: [
@@ -162,7 +289,10 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
         ],
       },
       settings: {
-        labelRenderedSizeThreshold: GRAPH_LABEL_THRESHOLD,
+        labelRenderedSizeThreshold: LABEL_MIN_RADIUS,
+        // circles are big and close: allow a name on every one of them
+        labelGridCellSize: 30,
+        labelDensity: 5,
         stagePadding: 60,
         // node sizes in screen pixels, so they don't balloon when the graph is small
         // (they still grow as you zoom in, which is what reveals the names)
@@ -197,11 +327,11 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
     if (!sigma || !data) return
     const oldGraph = sigma.getGraph()
     const previous = oldGraph.order ? readPositions(oldGraph) : new Map()
-    const graph = buildGraph(data, previous)
-    // names: centered on the node in the Graph view, under it in the Tree view
-    graph.forEachNode((id) =>
-      graph.setNodeAttribute(id, 'labelPos', view === 'tree' ? 'below' : 'over'),
-    )
+    // Re-fit the camera on first load and when switching views, not after edits.
+    const refit = previous.size === 0 || lastViewRef.current !== view
+    const graph = buildGraph(data, previous, viewRef.current.size)
+    // names are drawn inside the circles, in both views
+    graph.forEachNode((id) => graph.setNodeAttribute(id, 'labelPos', 'over'))
     // parent links are elbow lines in the Tree view, straight in the Graph view
     graph.forEachEdge((id, a) =>
       graph.setEdgeAttribute(
@@ -217,19 +347,24 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
     if (graph.order === 1) {
       const { x, y } = graph.getNodeAttributes(graph.nodes()[0])
       sigma.setCustomBBox({ x: [x - 50, x + 50], y: [y - 50, y + 50] })
-    } else {
+    } else if (refit) {
       sigma.setCustomBBox(null)
+    } else {
+      // after an edit keep the same padding, so the picture doesn't jump
+      sigma.setCustomBBox(viewRef.current.bbox)
     }
-    sigma.setSetting('labelRenderedSizeThreshold', view === 'tree' ? 0 : GRAPH_LABEL_THRESHOLD)
-    // tree view names everyone, so allow more labels (one per small grid cell)
-    sigma.setSetting('labelGridCellSize', view === 'tree' ? 40 : 100)
-    sigma.setSetting('labelDensity', view === 'tree' ? 3 : 1)
+    sigma.setSetting('labelRenderedSizeThreshold', LABEL_MIN_RADIUS)
     highlightedRef.current = null
 
-    // Re-fit the camera on first load and when switching views, not after edits.
-    const refit = previous.size === 0 || lastViewRef.current !== view
     lastViewRef.current = view
-    const fit = () => sigma.getCamera().reset({ duration: 300 })
+    // Pick circle size and padding for this layout, then fit the camera.
+    const fit = () => {
+      // the force layout needs help keeping big circles from overlapping
+      if (view === 'graph') separate(sigma, sigma.getGraph(), MAX_SIZE)
+      const result = tightenView(sigma, sigma.getGraph())
+      if (result) viewRef.current = result
+      sigma.getCamera().reset({ duration: 300 })
+    }
 
     let stop = () => {}
     if (view === 'tree') {
@@ -288,12 +423,12 @@ export default function TreeGraph({ data, view, selectedId, onSelect, children }
         style={{ display: 'none' }}
         className="pointer-events-none absolute top-0 left-0 rounded-full border-[2.5px] border-ink"
       />
-      {/* the pop-up card for the selected person (passed in as children); it
-          sits above the canvas and any nodes under it */}
+      {/* the card for the selected person (passed in as children). It stays at the
+          right of the canvas, under the add-member button, whichever person is selected. */}
       <div
         ref={cardRef}
         style={{ display: 'none' }}
-        className="absolute top-0 left-0 z-10"
+        className="absolute top-[76px] right-6 z-10 max-h-[calc(100%-92px)]"
       >
         {children}
       </div>
